@@ -1,0 +1,1 @@
+const {contextBridge,ipcRenderer}=require('electron');contextBridge.exposeInMainWorld('hyeona',{list:t=>ipcRenderer.invoke('tasks:list',t),add:(t,x)=>ipcRenderer.invoke('tasks:add',t,x),toggle:(t,id,d)=>ipcRenderer.invoke('tasks:toggle',t,id,d)});

@@ -1,7 +1,206 @@
-const {app,BrowserWindow,Menu,ipcMain}=require('electron');
-const DB='3cd946f4-5bc2-8059-9404-f0b86f771142';let win;
-async function notion(token,path,method='GET',body){const response=await fetch(`https://api.notion.com/v1/${path}`,{method,headers:{Authorization:`Bearer ${token}`,'Notion-Version':'2022-06-28','Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});const data=await response.json();if(!response.ok)throw new Error(data.message||'Notion 연결에 실패했어요.');return data}
-ipcMain.handle('tasks:list',async(_e,token)=>{const data=await notion(token,`databases/${DB}/query`,'POST',{page_size:50});return data.results.map(page=>{const p=page.properties;return{id:page.id,title:p['할 일']?.title?.map(x=>x.plain_text).join('')||'제목 없는 할 일',done:!!p['완료']?.checkbox,date:p['날짜']?.date?.start||''}}).sort((a,b)=>a.done-b.done||a.date.localeCompare(b.date))});
-ipcMain.handle('tasks:add',async(_e,token,title)=>{const today=new Date().toISOString().slice(0,10);await notion(token,'pages','POST',{parent:{database_id:DB},properties:{'할 일':{title:[{text:{content:title}}]},'완료':{checkbox:false},'날짜':{date:{start:today}}}});return true});
-ipcMain.handle('tasks:toggle',async(_e,token,id,done)=>{await notion(token,`pages/${id}`,'PATCH',{properties:{'완료':{checkbox:done}}});return true});
-function create(){win=new BrowserWindow({width:1120,height:720,minWidth:760,minHeight:540,title:'현아 위젯',autoHideMenuBar:true,backgroundColor:'#e9f5f6',webPreferences:{preload:require('path').join(__dirname,'preload.js'),contextIsolation:true,sandbox:true}});win.loadFile('index.html');const menu=Menu.buildFromTemplate([{label:'항상 위에 고정',type:'checkbox',click:i=>win.setAlwaysOnTop(i.checked)},{label:'새로고침',click:()=>win.reload()},{type:'separator'},{label:'종료',click:()=>app.quit()}]);win.webContents.on('context-menu',()=>menu.popup())}app.whenReady().then(create);app.on('window-all-closed',()=>{if(process.platform!=='darwin')app.quit()});
+const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron');
+const path = require('path');
+const fs = require('fs');
+
+// ── 데이터베이스 / 페이지 ID ──────────────────────────────
+const CALENDAR_DB = '3cd946f45bc2803da355faf7751fb866';   // 캘린더 (이름/날짜/완료)
+const BLEEDING_DB = 'c07869fbaaa746a593663a5ff92ebd22';   // 가계부 (항목/월/금액(만원)/완료)
+const WISHLIST_DB = '3cd946f45bc280cb875cfe998bc81776';   // 물결 위시리스트
+const MEMO_DB = '3cd946f45bc280dbafaec68c50665447';       // 물결 메모
+const ROUTINE_DB = '9d7cbaca00274f12a6d016927ffb0296';    // 오늘의 루틴
+const BRAINDUMP_PAGE = '3ce946f45bc281ab9e97d2aa17504ea9'; // 브레인덤프 단일 행
+const GRIND_URL = 'https://app.notion.com/p/35b946f45bc280aba379da06addd2eec';
+const PACKAGING_URL = 'https://app.notion.com/p/35b946f45bc280d393f0ee3c366a283b';
+
+const settingsPath = () => path.join(app.getPath('userData'), 'settings.json');
+function loadSettings() {
+  try { return JSON.parse(fs.readFileSync(settingsPath(), 'utf8')); } catch { return {}; }
+}
+function saveSettings(s) {
+  fs.writeFileSync(settingsPath(), JSON.stringify(s));
+}
+
+async function notion(token, path_, method = 'GET', body) {
+  const res = await fetch(`https://api.notion.com/v1/${path_}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Notion-Version': '2022-06-28',
+      'Content-Type': 'application/json',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Notion 연결에 실패했어요.');
+  return data;
+}
+
+function plainTitle(prop) {
+  return (prop?.title || []).map((x) => x.plain_text).join('') || '';
+}
+function plainText(prop) {
+  return (prop?.rich_text || []).map((x) => x.plain_text).join('') || '';
+}
+
+// 2주치 날짜 배열 (이번 주 일요일 ~ 13일 뒤)
+function twoWeekRange() {
+  const today = new Date();
+  const day = today.getDay();
+  const start = new Date(today);
+  start.setDate(today.getDate() - day);
+  const days = [];
+  for (let i = 0; i < 14; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    days.push(d);
+  }
+  return days;
+}
+function ymd(d) {
+  return d.toISOString().slice(0, 10);
+}
+
+ipcMain.handle('dashboard:load', async (_e, token) => {
+  const days = twoWeekRange();
+  const rangeStart = ymd(days[0]);
+  const rangeEnd = ymd(days[13]);
+  const todayStr = ymd(new Date());
+  const monthLabel = `${new Date().getMonth() + 1}월`;
+
+  const [calRes, bleedRes, wishRes, memoRes, routineRes, dumpRes] = await Promise.all([
+    notion(token, `databases/${CALENDAR_DB}/query`, 'POST', {
+      page_size: 100,
+      filter: {
+        and: [
+          { property: '날짜', date: { on_or_after: rangeStart } },
+          { property: '날짜', date: { on_or_before: rangeEnd } },
+        ],
+      },
+    }),
+    notion(token, `databases/${BLEEDING_DB}/query`, 'POST', {
+      page_size: 100,
+      filter: { property: '월', select: { equals: monthLabel } },
+    }),
+    notion(token, `databases/${WISHLIST_DB}/query`, 'POST', { page_size: 50 }),
+    notion(token, `databases/${MEMO_DB}/query`, 'POST', {
+      page_size: 10,
+      sorts: [{ timestamp: 'created_time', direction: 'descending' }],
+    }),
+    notion(token, `databases/${ROUTINE_DB}/query`, 'POST', { page_size: 20 }),
+    notion(token, `pages/${BRAINDUMP_PAGE}`),
+  ]);
+
+  const events = calRes.results.map((p) => ({
+    id: p.id,
+    title: plainTitle(p.properties['이름']) || '할 일',
+    done: !!p.properties['완료']?.checkbox,
+    date: p.properties['날짜']?.date?.start || '',
+  }));
+
+  const calendarDays = days.map((d) => {
+    const key = ymd(d);
+    return {
+      date: key,
+      day: d.getDate(),
+      isToday: key === todayStr,
+      hasEvent: events.some((e) => e.date === key),
+    };
+  });
+  const todayEvents = events.filter((e) => e.date === todayStr);
+
+  let bleedingSum = 0;
+  bleedRes.results.forEach((p) => {
+    bleedingSum += p.properties['금액(만원)']?.number || 0;
+  });
+
+  const wishlist = wishRes.results.map((p) => ({
+    id: p.id,
+    name: plainTitle(p.properties['이름']),
+    status: p.properties['상태']?.status?.name || '',
+  }));
+  const wishlistActive = wishlist.filter((w) => w.status !== '완료').length;
+
+  const memo = memoRes.results.slice(0, 2).map((p) => ({
+    id: p.id,
+    title: plainTitle(p.properties['제목']),
+  }));
+
+  const routine = routineRes.results.map((p) => ({
+    id: p.id,
+    title: plainTitle(p.properties['항목']),
+    done: !!p.properties['완료']?.checkbox,
+  }));
+  const routineDone = routine.filter((r) => r.done).length;
+
+  const brainDump = plainText(dumpRes.properties['내용']);
+
+  return {
+    monthLabel,
+    calendarDays,
+    todayEvents,
+    bleeding: { sum: bleedingSum, monthLabel },
+    wishlist: { active: wishlistActive, total: wishlist.length },
+    memo,
+    routine: { items: routine, done: routineDone, total: routine.length },
+    brainDump,
+    links: { grind: GRIND_URL, packaging: PACKAGING_URL },
+  };
+});
+
+ipcMain.handle('task:toggle', async (_e, token, id, done) => {
+  await notion(token, `pages/${id}`, 'PATCH', { properties: { 완료: { checkbox: done } } });
+  return true;
+});
+ipcMain.handle('routine:toggle', async (_e, token, id, done) => {
+  await notion(token, `pages/${id}`, 'PATCH', { properties: { 완료: { checkbox: done } } });
+  return true;
+});
+ipcMain.handle('bleeding:toggle', async (_e, token, id, done) => {
+  await notion(token, `pages/${id}`, 'PATCH', { properties: { 완료: { checkbox: done } } });
+  return true;
+});
+ipcMain.handle('braindump:save', async (_e, token, text) => {
+  await notion(token, `pages/${BRAINDUMP_PAGE}`, 'PATCH', {
+    properties: { 내용: { rich_text: [{ text: { content: text.slice(0, 1900) } }] } },
+  });
+  return true;
+});
+ipcMain.handle('link:open', async (_e, url) => {
+  shell.openExternal(url);
+});
+ipcMain.handle('settings:get', () => loadSettings());
+ipcMain.handle('settings:set', (_e, s) => {
+  saveSettings(s);
+  return true;
+});
+
+let win;
+function create() {
+  win = new BrowserWindow({
+    width: 1180,
+    height: 760,
+    minWidth: 900,
+    minHeight: 600,
+    title: "hyeona's dashboard",
+    autoHideMenuBar: true,
+    backgroundColor: '#ffffff',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      sandbox: true,
+    },
+  });
+  win.loadFile('index.html');
+  const menu = Menu.buildFromTemplate([
+    { label: '항상 위에 고정', type: 'checkbox', click: (i) => win.setAlwaysOnTop(i.checked) },
+    { label: '새로고침', click: () => win.reload() },
+    { label: '토큰 다시 설정', click: () => { saveSettings({}); win.reload(); } },
+    { type: 'separator' },
+    { label: '종료', click: () => app.quit() },
+  ]);
+  win.webContents.on('context-menu', () => menu.popup());
+}
+app.whenReady().then(create);
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') app.quit();
+});

@@ -5,5 +5,7 @@
     <LinearLayout android:id="@+id/row2" style="@style/TaskRow"><Button android:id="@+id/check2" style="@style/Check"/><TextView android:id="@+id/text2" style="@style/TaskText"/></LinearLayout>
     <LinearLayout android:id="@+id/row3" style="@style/TaskRow"><Button android:id="@+id/check3" style="@style/Check"/><TextView android:id="@+id/text3" style="@style/TaskText"/></LinearLayout>
     <TextView android:id="@+id/empty" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="12sp" android:textColor="#76888B" />
+    <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="6dp" android:layout_marginBottom="6dp" android:background="#22283C43" />
+    <TextView android:id="@+id/money_summary" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:textColor="#28373B" android:textStyle="bold" />
 </LinearLayout>
 

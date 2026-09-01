@@ -192,6 +192,11 @@ function create() {
   });
   win.loadFile('index.html');
   const menu = Menu.buildFromTemplate([
+    { label: '잘라내기', role: 'cut' },
+    { label: '복사', role: 'copy' },
+    { label: '붙여넣기', role: 'paste' },
+    { label: '전체 선택', role: 'selectAll' },
+    { type: 'separator' },
     { label: '항상 위에 고정', type: 'checkbox', click: (i) => win.setAlwaysOnTop(i.checked) },
     { label: '새로고침', click: () => win.reload() },
     { label: '토큰 다시 설정', click: () => { saveSettings({}); win.reload(); } },

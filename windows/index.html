@@ -57,12 +57,14 @@
   .card { background: #fbfaf9; border-radius: 16px; padding: 0.8rem 1rem; border: 0.5px solid #eeebe7; }
   .card-label { font-size: 11px; color: #9c9490; letter-spacing: 0.08em; margin-bottom: 6px; }
 
-  #calendar-card { margin-bottom: 12px; }
-  #cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
+  #calendar-card { margin-bottom: 12px; min-height: 260px; }
+  #cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; text-align: left; }
   #cal-grid .dow { font-size: 9px; color: #c6c1bb; }
-  #cal-grid .day { padding: 3px 0; border-radius: 6px; font-size: 11px; color: #2c2a28; position: relative; }
-  #cal-grid .day.today { background: #1f1e1c; color: #fff; font-weight: 500; }
+  #cal-grid .day { padding: 6px; border-radius: 9px; font-size: 11px; color: #2c2a28; position: relative; min-height:72px; background:#fff; border:.5px solid #f0ece8; overflow:hidden; }
+  #cal-grid .day.today { background: #292725; color: #fff; font-weight: 500; }
   #cal-grid .day .dot { width: 3px; height: 3px; border-radius: 50%; background: #d4537e; margin: 1px auto 0; }
+  .cal-event { margin-top:4px; padding:3px 5px; border-radius:5px; background:#e7f3f5; color:#31565d; font-size:9px; line-height:1.25; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:400; }
+  .day.today .cal-event { background:#f6dce6; color:#5e263a; }
   #today-list { margin-top: 8px; padding-top: 8px; border-top: 0.5px solid #eeebe7; }
   #today-list .hint { font-size: 10px; color: #9c9490; margin-bottom: 4px; }
   .task-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; cursor: pointer; }
@@ -70,7 +72,9 @@
   .task-row .txt { font-size: 12px; }
   .task-row.done .txt { color: #6b6560; text-decoration: line-through; }
 
-  .grid3 { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 12px; }
+  .workspace { display:grid; grid-template-columns:220px minmax(0,1fr); gap:12px; }
+  .action-rail { display:flex; flex-direction:column; gap:10px; }
+  .content-area { min-width:0; display:flex; flex-direction:column; gap:12px; }
   .stack { display: flex; flex-direction: column; gap: 10px; }
 
   .pill { background: #1f1e1c; border-radius: 24px; padding: 10px 16px; display: flex; align-items: center; gap: 8px; }
@@ -81,7 +85,9 @@
   .pill.pink { background: #fbeaf0; }
   .pill.pink span.label { color: #4b1528; }
 
-  #memo-card .memo-item { padding: 0 0 10px; border-bottom: 0.5px solid #eeebe7; margin-bottom: 10px; }
+  #memo-card { min-height:190px; }
+  #memo-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; max-height:220px; overflow:auto; padding-right:4px; }
+  #memo-card .memo-item { padding:10px 12px; border:0.5px solid #ece7e2; background:#fff; border-radius:10px; margin:0; min-height:48px; }
   #memo-card .memo-item:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
   #memo-card .memo-title { font-size: 14px; color: #2c2a28; }
 
@@ -136,6 +142,15 @@
 
   <div class="main-flex">
     <div class="col-main">
+      <div class="workspace">
+       <div class="action-rail">
+          <div class="pill editable-card" id="bleeding-card"><span style="font-size:14px;color:#ed93b1">◈</span><span class="label" id="bleeding-label">bleeding ·˚ ··· ˚·</span></div>
+          <div class="pill editable-card" id="routine-card"><span style="font-size:14px;color:#5dcaa5">✓</span><span class="label" id="routine-label">routine ·˚ ··· ˚·</span></div>
+          <div class="pill pink editable-card" id="wishlist-card"><span style="font-size:14px;color:#993556">♡</span><span class="label" id="wishlist-label">wishlist ·˚ ··· ˚·</span></div>
+          <div class="pill click" id="grind-btn"><span class="label">grind or be ground</span><span style="color:#b4b2a9">↗</span></div>
+          <div class="pill click" id="packaging-btn"><span class="label">the packaging🎀</span><span style="color:#b4b2a9">↗</span></div>
+       </div>
+       <div class="content-area">
       <div class="card editable-card" id="calendar-card">
         <div class="card-label">CALENDAR · 2 WEEKS</div>
         <div id="cal-grid"></div>
@@ -144,38 +159,11 @@
           <div id="today-tasks"></div>
         </div>
       </div>
-
-      <div class="grid3">
-        <div class="stack">
-          <div class="pill editable-card" id="bleeding-card">
-            <span style="font-size:14px; color:#ed93b1;">◈</span>
-            <span class="label" id="bleeding-label">bleeding ·˚ ··· ˚·</span>
-          </div>
-          <div class="pill editable-card" id="routine-card">
-            <span style="font-size:14px; color:#5dcaa5;">✓</span>
-            <span class="label" id="routine-label">routine ·˚ ··· ˚·</span>
-          </div>
-          <div class="pill click" id="grind-btn">
-            <span class="label">grind or be ground</span>
-            <span style="color:#b4b2a9;">↗</span>
-          </div>
-        </div>
-
         <div class="card editable-card" id="memo-card">
           <div class="card-label">MEMO</div>
           <div id="memo-list"></div>
         </div>
-
-        <div class="stack">
-          <div class="pill pink editable-card" id="wishlist-card">
-            <span style="font-size:14px; color:#993556;">♡</span>
-            <span class="label" id="wishlist-label">wishlist ·˚ ··· ˚·</span>
-          </div>
-          <div class="pill click" id="packaging-btn">
-            <span class="label">the packaging🎀</span>
-            <span style="color:#b4b2a9;">↗</span>
-          </div>
-        </div>
+       </div>
       </div>
 
       <div id="footer-tag">life.....is a bitch..🕶️</div>
@@ -351,11 +339,11 @@ function fmtDate2(){const d=new Date(),days=['SUNDAY','MONDAY','TUESDAY','WEDNES
 function renderCalendar2(data,token){
  const grid=document.getElementById('cal-grid');grid.innerHTML='';
  DOW2.forEach(l=>{const x=document.createElement('div');x.className='dow';x.textContent=l;grid.appendChild(x)});
- data.calendarDays.forEach(d=>{const x=document.createElement('div');x.className='day'+(d.isToday?' today':'');x.textContent=d.day;if(d.hasEvent){const dot=document.createElement('div');dot.className='dot';x.appendChild(dot)}grid.appendChild(x)});
+ data.calendarDays.forEach(d=>{const x=document.createElement('div');x.className='day'+(d.isToday?' today':'');const num=document.createElement('div');num.textContent=d.day;x.appendChild(num);(d.events||[]).slice(0,3).forEach(ev=>{const e=document.createElement('div');e.className='cal-event';e.textContent=(ev.done?'✓ ':'')+ev.title;e.title=ev.title;x.appendChild(e)});if((d.events||[]).length>3){const more=document.createElement('div');more.className='cal-event';more.textContent=`+${d.events.length-3}개 더`;x.appendChild(more)}grid.appendChild(x)});
  const list=document.getElementById('today-tasks');list.innerHTML=data.todayEvents.length?'':'<div style="font-size:12px;color:#9c9490">오늘 할 일이 없어요 ♡</div>';
  data.todayEvents.forEach(ev=>{const row=document.createElement('div');row.className='task-row'+(ev.done?' done':'');row.innerHTML=`<span class="chk">${ev.done?'✓':'○'}</span><span class="txt">${esc2(ev.title)}</span>`;row.onclick=async e=>{e.stopPropagation();await window.hyeona.updateItem(token,'calendar',ev.id,{done:!ev.done});await refresh2()};list.appendChild(row)})
 }
-function renderMemo2(items){document.getElementById('memo-list').innerHTML=items.length?items.slice(0,2).map(x=>`<div class="memo-item"><div class="memo-title serif">${esc2(x.title)}</div></div>`).join(''):'<div style="font-size:12px;color:#9c9490">메모가 없어요</div>'}
+function renderMemo2(items){document.getElementById('memo-list').innerHTML=items.length?items.map(x=>`<div class="memo-item"><div class="memo-title serif">${esc2(x.title)}</div></div>`).join(''):'<div style="font-size:12px;color:#9c9490">메모가 없어요</div>'}
 async function refresh2(){
  const token=await token2();if(!token){showSettings2();return}
  try{const data=await window.hyeona.load(token);dashboardData=data;const b=document.getElementById('error-banner');if(data.errors?.length){b.style.display='block';b.innerHTML=data.errors.map(e=>'⚠ '+esc2(e)).join('<br>')}else b.style.display='none';

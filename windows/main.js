@@ -66,29 +66,37 @@ ipcMain.handle('dashboard:load', async (_e, token) => {
   const rangeEnd = ymd(days[13]);
   const todayStr = ymd(new Date());
   const monthLabel = `${new Date().getMonth() + 1}월`;
+  const errors = [];
 
-  const [calRes, bleedRes, wishRes, memoRes, routineRes, dumpRes] = await Promise.all([
-    notion(token, `databases/${CALENDAR_DB}/query`, 'POST', {
-      page_size: 100,
-      filter: {
-        and: [
-          { property: '날짜', date: { on_or_after: rangeStart } },
-          { property: '날짜', date: { on_or_before: rangeEnd } },
-        ],
-      },
-    }),
-    notion(token, `databases/${BLEEDING_DB}/query`, 'POST', {
-      page_size: 100,
-      filter: { property: '월', select: { equals: monthLabel } },
-    }),
-    notion(token, `databases/${WISHLIST_DB}/query`, 'POST', { page_size: 50 }),
-    notion(token, `databases/${MEMO_DB}/query`, 'POST', {
-      page_size: 10,
-      sorts: [{ timestamp: 'created_time', direction: 'descending' }],
-    }),
-    notion(token, `databases/${ROUTINE_DB}/query`, 'POST', { page_size: 20 }),
-    notion(token, `pages/${BRAINDUMP_PAGE}`),
-  ]);
+  async function safe(label, fn, fallback) {
+    try { return await fn(); } catch (e) { errors.push(`${label}: ${e.message}`); return fallback; }
+  }
+
+  const calRes = await safe('캘린더', () => notion(token, `databases/${CALENDAR_DB}/query`, 'POST', {
+    page_size: 100,
+    filter: {
+      and: [
+        { property: '날짜', date: { on_or_after: rangeStart } },
+        { property: '날짜', date: { on_or_before: rangeEnd } },
+      ],
+    },
+  }), { results: [] });
+
+  const bleedRes = await safe('가계부', () => notion(token, `databases/${BLEEDING_DB}/query`, 'POST', {
+    page_size: 100,
+    filter: { property: '월', select: { equals: monthLabel } },
+  }), { results: [] });
+
+  const wishRes = await safe('위시리스트', () => notion(token, `databases/${WISHLIST_DB}/query`, 'POST', { page_size: 50 }), { results: [] });
+
+  const memoRes = await safe('메모', () => notion(token, `databases/${MEMO_DB}/query`, 'POST', {
+    page_size: 10,
+    sorts: [{ timestamp: 'created_time', direction: 'descending' }],
+  }), { results: [] });
+
+  const routineRes = await safe('루틴', () => notion(token, `databases/${ROUTINE_DB}/query`, 'POST', { page_size: 20 }), { results: [] });
+
+  const dumpRes = await safe('브레인덤프', () => notion(token, `pages/${BRAINDUMP_PAGE}`), { properties: {} });
 
   const events = calRes.results.map((p) => ({
     id: p.id,
@@ -144,6 +152,7 @@ ipcMain.handle('dashboard:load', async (_e, token) => {
     routine: { items: routine, done: routineDone, total: routine.length },
     brainDump,
     links: { grind: GRIND_URL, packaging: PACKAGING_URL },
+    errors,
   };
 });
 
@@ -192,11 +201,6 @@ function create() {
   });
   win.loadFile('index.html');
   const menu = Menu.buildFromTemplate([
-    { label: '잘라내기', role: 'cut' },
-    { label: '복사', role: 'copy' },
-    { label: '붙여넣기', role: 'paste' },
-    { label: '전체 선택', role: 'selectAll' },
-    { type: 'separator' },
     { label: '항상 위에 고정', type: 'checkbox', click: (i) => win.setAlwaysOnTop(i.checked) },
     { label: '새로고침', click: () => win.reload() },
     { label: '토큰 다시 설정', click: () => { saveSettings({}); win.reload(); } },

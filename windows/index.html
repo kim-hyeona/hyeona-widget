@@ -91,6 +91,7 @@
   .sidebar textarea { flex: 1; min-height: 400px; resize: none; border: none; background: transparent; outline: none; font-size: 13px; color: #2c2a28; font-family: Georgia, serif; line-height: 1.7; }
 
   #footer-tag { margin-top: 14px; font-size: 13px; font-weight: 500; color: #2c2a28; position: relative; }
+  #error-banner { display: none; background: #fcebeb; color: #791f1f; font-size: 12px; padding: 8px 12px; border-radius: 10px; margin-bottom: 12px; }
 </style>
 </head>
 <body>
@@ -113,6 +114,8 @@
     <div class="day-label" id="day-label">TUESDAY</div>
     <div class="date-pill" id="date-pill">09 · 01</div>
   </div>
+
+  <div id="error-banner"></div>
 
   <div class="main-flex">
     <div class="col-main">
@@ -238,6 +241,13 @@ async function refresh() {
   if (!token) { showSettings(); return; }
   try {
     const data = await window.hyeona.load(token);
+    const banner = document.getElementById('error-banner');
+    if (data.errors && data.errors.length > 0) {
+      banner.style.display = 'block';
+      banner.innerHTML = data.errors.map(e => `⚠ ${e}`).join('<br>');
+    } else {
+      banner.style.display = 'none';
+    }
     fmtDate();
     renderCalendar(data.calendarDays, data.todayEvents, token);
     document.getElementById('bleeding-label').textContent = `bleeding ·˚ ${data.bleeding.sum >= 0 ? '+' : ''}${data.bleeding.sum}만 ˚·`;

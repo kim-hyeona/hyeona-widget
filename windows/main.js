@@ -90,7 +90,7 @@ ipcMain.handle('dashboard:load', async (_e, token) => {
   const wishRes = await safe('위시리스트', () => notion(token, `databases/${WISHLIST_DB}/query`, 'POST', { page_size: 50 }), { results: [] });
 
   const memoRes = await safe('메모', () => notion(token, `databases/${MEMO_DB}/query`, 'POST', {
-    page_size: 10,
+    page_size: 50,
     sorts: [{ timestamp: 'created_time', direction: 'descending' }],
   }), { results: [] });
 
@@ -107,11 +107,13 @@ ipcMain.handle('dashboard:load', async (_e, token) => {
 
   const calendarDays = days.map((d) => {
     const key = ymd(d);
+    const dayEvents = events.filter((e) => e.date === key);
     return {
       date: key,
       day: d.getDate(),
       isToday: key === todayStr,
-      hasEvent: events.some((e) => e.date === key),
+      hasEvent: dayEvents.length > 0,
+      events: dayEvents,
     };
   });
   const todayEvents = events.filter((e) => e.date === todayStr);
@@ -137,7 +139,7 @@ ipcMain.handle('dashboard:load', async (_e, token) => {
   }));
   const wishlistActive = wishlist.filter((w) => w.status !== '완료').length;
 
-  const memo = memoRes.results.slice(0, 2).map((p) => ({
+  const memo = memoRes.results.map((p) => ({
     id: p.id,
     title: plainTitle(p.properties['제목']),
   }));

@@ -117,8 +117,17 @@ ipcMain.handle('dashboard:load', async (_e, token) => {
   const todayEvents = events.filter((e) => e.date === todayStr);
 
   let bleedingSum = 0;
-  bleedRes.results.forEach((p) => {
-    bleedingSum += p.properties['금액(만원)']?.number || 0;
+  const bleedingItems = bleedRes.results.map((p) => {
+    const amount = p.properties['금액(만원)']?.number || 0;
+    bleedingSum += amount;
+    return {
+      id: p.id,
+      title: plainTitle(p.properties['항목']),
+      amount,
+      memo: plainText(p.properties['메모']),
+      month: p.properties['월']?.select?.name || monthLabel,
+      done: !!p.properties['완료']?.checkbox,
+    };
   });
 
   const wishlist = wishRes.results.map((p) => ({
@@ -140,14 +149,17 @@ ipcMain.handle('dashboard:load', async (_e, token) => {
   }));
   const routineDone = routine.filter((r) => r.done).length;
 
-  const brainDump = plainText(dumpRes.properties['내용']);
+  const notionBrainDump = plainText(dumpRes.properties['내용']);
+  const localSettings = loadSettings();
+  const brainDump = typeof localSettings.brainDraft === 'string' ? localSettings.brainDraft : notionBrainDump;
 
   return {
     monthLabel,
     calendarDays,
     todayEvents,
-    bleeding: { sum: bleedingSum, monthLabel },
-    wishlist: { active: wishlistActive, total: wishlist.length },
+    events,
+    bleeding: { sum: bleedingSum, monthLabel, items: bleedingItems },
+    wishlist: { active: wishlistActive, total: wishlist.length, items: wishlist },
     memo,
     routine: { items: routine, done: routineDone, total: routine.length },
     brainDump,
@@ -173,6 +185,52 @@ ipcMain.handle('braindump:save', async (_e, token, text) => {
     properties: { 내용: { rich_text: [{ text: { content: text.slice(0, 1900) } }] } },
   });
   return true;
+});
+ipcMain.handle('braindump:draft', (_e, text) => {
+  const s = loadSettings();
+  saveSettings({ ...s, brainDraft: String(text).slice(0, 1900) });
+  return true;
+});
+
+const TYPES = {
+  calendar: { db: CALENDAR_DB, title: '이름' },
+  bleeding: { db: BLEEDING_DB, title: '항목' },
+  wishlist: { db: WISHLIST_DB, title: '이름' },
+  memo: { db: MEMO_DB, title: '제목' },
+  routine: { db: ROUTINE_DB, title: '항목' },
+};
+function typeConfig(type) {
+  const config = TYPES[type];
+  if (!config) throw new Error('지원하지 않는 항목이에요.');
+  return config;
+}
+function itemProperties(type, payload, partial = false) {
+  const c = typeConfig(type);
+  const props = {};
+  if (!partial || payload.title !== undefined) {
+    props[c.title] = { title: [{ text: { content: String(payload.title || '').slice(0, 500) } }] };
+  }
+  if (payload.done !== undefined && ['calendar','bleeding','routine'].includes(type)) {
+    props['완료'] = { checkbox: !!payload.done };
+  }
+  if (type === 'calendar' && payload.date !== undefined) props['날짜'] = { date: { start: payload.date } };
+  if (type === 'bleeding') {
+    if (payload.amount !== undefined) props['금액(만원)'] = { number: Number(payload.amount) || 0 };
+    if (payload.month !== undefined) props['월'] = { select: { name: payload.month } };
+    if (payload.memo !== undefined) props['메모'] = { rich_text: [{ text: { content: String(payload.memo).slice(0, 1000) } }] };
+  }
+  if (type === 'wishlist' && payload.status !== undefined) props['상태'] = { status: { name: payload.status } };
+  return props;
+}
+ipcMain.handle('item:create', async (_e, token, type, payload) => {
+  const c = typeConfig(type);
+  return notion(token, 'pages', 'POST', { parent: { database_id: c.db }, properties: itemProperties(type, payload) });
+});
+ipcMain.handle('item:update', async (_e, token, type, id, payload) => {
+  return notion(token, `pages/${id}`, 'PATCH', { properties: itemProperties(type, payload, true) });
+});
+ipcMain.handle('item:delete', async (_e, token, id) => {
+  return notion(token, `pages/${id}`, 'PATCH', { archived: true });
 });
 ipcMain.handle('link:open', async (_e, url) => {
   shell.openExternal(url);

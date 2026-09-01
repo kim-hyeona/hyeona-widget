@@ -92,6 +92,23 @@
 
   #footer-tag { margin-top: 14px; font-size: 13px; font-weight: 500; color: #2c2a28; position: relative; }
   #error-banner { display: none; background: #fcebeb; color: #791f1f; font-size: 12px; padding: 8px 12px; border-radius: 10px; margin-bottom: 12px; }
+  .editable-card { cursor: pointer; transition: transform .15s, box-shadow .15s; }
+  .editable-card:hover { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(50,40,35,.08); }
+  #dump-status { font-size: 10px; color: #9c9490; min-height: 14px; margin-top: 6px; }
+  #modal { display:none; position:fixed; inset:0; background:rgba(31,30,28,.28); z-index:30; align-items:center; justify-content:center; }
+  .modal-box { width:min(680px,92vw); max-height:84vh; overflow:auto; background:#fff; border-radius:20px; padding:22px; box-shadow:0 24px 70px rgba(31,30,28,.2); }
+  .modal-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+  .modal-head h2 { margin:0; font:500 20px Georgia,serif; }
+  .icon-btn { border:0; background:transparent; cursor:pointer; font-size:18px; color:#777; }
+  .editor-form { display:grid; grid-template-columns:1fr 120px 1fr auto; gap:8px; margin-bottom:14px; }
+  .editor-form input,.editor-form select { border:.5px solid #ddd7d2; background:#fbfaf9; border-radius:10px; padding:9px 11px; min-width:0; }
+  .primary { border:0; border-radius:12px; padding:9px 15px; background:#1f1e1c; color:#fff; cursor:pointer; }
+  .item-list { display:grid; gap:7px; }
+  .edit-row { display:grid; grid-template-columns:auto 1fr 105px 1fr auto auto; gap:8px; align-items:center; padding:9px 10px; border:.5px solid #eee9e5; border-radius:12px; }
+  .edit-row input,.edit-row select { width:100%; border:0; background:transparent; padding:5px; }
+  .small-btn { border:0; border-radius:9px; padding:7px 9px; cursor:pointer; background:#f1efed; }
+  .danger { color:#a32d2d; }
+  .modal-status { font-size:11px; color:#8a817c; min-height:16px; margin-top:10px; }
 </style>
 </head>
 <body>
@@ -119,7 +136,7 @@
 
   <div class="main-flex">
     <div class="col-main">
-      <div class="card" id="calendar-card">
+      <div class="card editable-card" id="calendar-card">
         <div class="card-label">CALENDAR · 2 WEEKS</div>
         <div id="cal-grid"></div>
         <div id="today-list">
@@ -130,11 +147,11 @@
 
       <div class="grid3">
         <div class="stack">
-          <div class="pill">
+          <div class="pill editable-card" id="bleeding-card">
             <span style="font-size:14px; color:#ed93b1;">◈</span>
             <span class="label" id="bleeding-label">bleeding ·˚ ··· ˚·</span>
           </div>
-          <div class="pill">
+          <div class="pill editable-card" id="routine-card">
             <span style="font-size:14px; color:#5dcaa5;">✓</span>
             <span class="label" id="routine-label">routine ·˚ ··· ˚·</span>
           </div>
@@ -144,13 +161,13 @@
           </div>
         </div>
 
-        <div class="card" id="memo-card">
+        <div class="card editable-card" id="memo-card">
           <div class="card-label">MEMO</div>
           <div id="memo-list"></div>
         </div>
 
         <div class="stack">
-          <div class="pill pink">
+          <div class="pill pink editable-card" id="wishlist-card">
             <span style="font-size:14px; color:#993556;">♡</span>
             <span class="label" id="wishlist-label">wishlist ·˚ ··· ˚·</span>
           </div>
@@ -167,11 +184,22 @@
     <div class="sidebar">
       <div class="card-label">BRAIN DUMP</div>
       <textarea id="brain-dump" placeholder="아무거나 그냥 적어"></textarea>
+      <div id="dump-status"></div>
     </div>
   </div>
 </div>
 
+<div id="modal">
+  <div class="modal-box">
+    <div class="modal-head"><h2 id="modal-title"></h2><button class="icon-btn" id="modal-close">×</button></div>
+    <form class="editor-form" id="editor-form"></form>
+    <div class="item-list" id="editor-list"></div>
+    <div class="modal-status" id="modal-status"></div>
+  </div>
+</div>
+
 <script>
+if (false) {
 const DOW = ['일','월','화','수','목','금','토'];
 
 function fmtDate() {
@@ -304,6 +332,76 @@ window.addEventListener('focus', refresh);
     showSettings();
   }
 })();
+}
+</script>
+<script>
+const DOW2=['일','월','화','수','목','금','토'];
+let dashboardData=null, activeType=null, refreshTimer2=null, dumpTimer2=null;
+const TYPE_META={
+  calendar:{title:'CALENDAR',button:'일정 추가',fields:['title','date']},
+  bleeding:{title:'BLEEDING · 가계부',button:'항목 추가',fields:['title','amount']},
+  routine:{title:'ROUTINE',button:'루틴 추가',fields:['title']},
+  wishlist:{title:'WISHLIST',button:'위시 추가',fields:['title']},
+  memo:{title:'MEMO',button:'메모 추가',fields:['title']},
+};
+const esc2=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const today2=()=>new Date().toISOString().slice(0,10);
+async function token2(){return (await window.hyeona.getSettings()).token}
+function fmtDate2(){const d=new Date(),days=['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];document.getElementById('day-label').textContent=days[d.getDay()];document.getElementById('date-pill').textContent=String(d.getMonth()+1).padStart(2,'0')+' · '+String(d.getDate()).padStart(2,'0')}
+function renderCalendar2(data,token){
+ const grid=document.getElementById('cal-grid');grid.innerHTML='';
+ DOW2.forEach(l=>{const x=document.createElement('div');x.className='dow';x.textContent=l;grid.appendChild(x)});
+ data.calendarDays.forEach(d=>{const x=document.createElement('div');x.className='day'+(d.isToday?' today':'');x.textContent=d.day;if(d.hasEvent){const dot=document.createElement('div');dot.className='dot';x.appendChild(dot)}grid.appendChild(x)});
+ const list=document.getElementById('today-tasks');list.innerHTML=data.todayEvents.length?'':'<div style="font-size:12px;color:#9c9490">오늘 할 일이 없어요 ♡</div>';
+ data.todayEvents.forEach(ev=>{const row=document.createElement('div');row.className='task-row'+(ev.done?' done':'');row.innerHTML=`<span class="chk">${ev.done?'✓':'○'}</span><span class="txt">${esc2(ev.title)}</span>`;row.onclick=async e=>{e.stopPropagation();await window.hyeona.updateItem(token,'calendar',ev.id,{done:!ev.done});await refresh2()};list.appendChild(row)})
+}
+function renderMemo2(items){document.getElementById('memo-list').innerHTML=items.length?items.slice(0,2).map(x=>`<div class="memo-item"><div class="memo-title serif">${esc2(x.title)}</div></div>`).join(''):'<div style="font-size:12px;color:#9c9490">메모가 없어요</div>'}
+async function refresh2(){
+ const token=await token2();if(!token){showSettings2();return}
+ try{const data=await window.hyeona.load(token);dashboardData=data;const b=document.getElementById('error-banner');if(data.errors?.length){b.style.display='block';b.innerHTML=data.errors.map(e=>'⚠ '+esc2(e)).join('<br>')}else b.style.display='none';
+ fmtDate2();renderCalendar2(data,token);renderMemo2(data.memo);
+ document.getElementById('bleeding-label').textContent=`bleeding ·˚ ${data.bleeding.sum>=0?'+':''}${data.bleeding.sum}만 ˚·`;
+ document.getElementById('routine-label').textContent=`routine ·˚ ${data.routine.done}/${data.routine.total} ˚·`;
+ document.getElementById('wishlist-label').textContent=`wishlist ·˚ ${data.wishlist.active} ˚·`;
+ document.getElementById('grind-btn').onclick=()=>window.hyeona.openLink(data.links.grind);document.getElementById('packaging-btn').onclick=()=>window.hyeona.openLink(data.links.packaging);
+ const dump=document.getElementById('brain-dump');if(document.activeElement!==dump)dump.value=data.brainDump||'';
+ if(activeType) renderEditor2();
+ }catch(e){const b=document.getElementById('error-banner');b.style.display='block';b.textContent='⚠ '+e.message}
+}
+function dataItems2(type){if(!dashboardData)return[];if(type==='calendar')return dashboardData.events||[];if(type==='bleeding')return dashboardData.bleeding.items||[];if(type==='routine')return dashboardData.routine.items||[];if(type==='wishlist')return dashboardData.wishlist.items||[];return dashboardData.memo||[]}
+function inputFields2(type,item={}){
+ let html=`<input name="title" required placeholder="제목" value="${esc2(item.title||'')}">`;
+ if(type==='calendar')html+=`<input name="date" type="date" value="${esc2(item.date||today2())}"><span></span>`;
+ else if(type==='bleeding')html+=`<input name="amount" type="number" step="0.1" placeholder="금액(만원)" value="${item.amount??''}"><input name="memo" placeholder="메모" value="${esc2(item.memo||'')}">`;
+ else html+='<span></span><span></span>';
+ return html
+}
+function rowExtra2(type,item){if(type==='calendar')return `<input data-field="date" type="date" value="${esc2(item.date||'')}"><span></span>`;if(type==='bleeding')return `<input data-field="amount" type="number" value="${item.amount??0}"><input data-field="memo" placeholder="메모" value="${esc2(item.memo||'')}">`;if(type==='wishlist'){const active=item.status&&item.status!=='완료'?item.status:'시작 전';return `<select data-field="status"><option value="${esc2(active)}" ${item.status==='완료'?'':'selected'}>${esc2(active)}</option><option value="완료" ${item.status==='완료'?'selected':''}>완료</option></select><span></span>`}return '<span></span><span></span>'}
+function renderEditor2(){
+ const meta=TYPE_META[activeType],items=dataItems2(activeType);document.getElementById('modal-title').textContent=meta.title;
+ const form=document.getElementById('editor-form');form.innerHTML=inputFields2(activeType)+`<button class="primary">${meta.button}</button>`;
+ form.onsubmit=async e=>{e.preventDefault();const fd=new FormData(form),payload={title:fd.get('title')};if(activeType==='calendar')payload.date=fd.get('date');if(activeType==='bleeding'){payload.amount=Number(fd.get('amount')||0);payload.month=dashboardData.bleeding.monthLabel;payload.memo=fd.get('memo')||'';payload.done=false}if(['calendar','routine'].includes(activeType))payload.done=false;await act2(()=>window.hyeona.createItem(token2cache,activeType,payload),'추가했어요')};
+ const list=document.getElementById('editor-list');list.innerHTML=items.length?'':'<div style="font-size:12px;color:#9c9490;padding:15px">항목이 없어요</div>';
+ items.forEach(item=>{const row=document.createElement('div');row.className='edit-row';const check=['calendar','bleeding','routine'].includes(activeType)?`<button class="small-btn check">${item.done?'✓':'○'}</button>`:'<span></span>';row.innerHTML=check+`<input data-field="title" value="${esc2(item.title)}">`+rowExtra2(activeType,item)+`<button class="small-btn save">저장</button><button class="small-btn danger del">삭제</button>`;
+ const getPayload=()=>{const p={title:row.querySelector('[data-field="title"]').value};row.querySelectorAll('[data-field]:not([data-field="title"])').forEach(extra=>p[extra.dataset.field]=extra.dataset.field==='amount'?Number(extra.value||0):extra.value);return p};
+ row.querySelector('.save').onclick=()=>act2(()=>window.hyeona.updateItem(token2cache,activeType,item.id,getPayload()),'저장했어요');row.querySelector('.del').onclick=()=>act2(()=>window.hyeona.deleteItem(token2cache,item.id),'삭제했어요');
+ const chk=row.querySelector('.check');if(chk)chk.onclick=()=>act2(()=>window.hyeona.updateItem(token2cache,activeType,item.id,{done:!item.done}),'완료 상태를 바꿨어요');list.appendChild(row)})
+}
+let token2cache='';
+async function act2(fn,msg){const st=document.getElementById('modal-status');st.textContent='저장 중…';try{await fn();st.textContent=msg;await refresh2()}catch(e){st.textContent='저장 실패: '+e.message}}
+async function openEditor2(type){token2cache=await token2();activeType=type;document.getElementById('modal').style.display='flex';renderEditor2()}
+function closeEditor2(){activeType=null;document.getElementById('modal').style.display='none'}
+function showSettings2(){document.getElementById('settings-screen').style.display='flex';document.getElementById('dashboard-screen').style.display='none'}
+function showDashboard2(){document.getElementById('settings-screen').style.display='none';document.getElementById('dashboard-screen').style.display='block'}
+document.getElementById('modal-close').onclick=closeEditor2;document.getElementById('modal').onclick=e=>{if(e.target.id==='modal')closeEditor2()};
+['calendar','bleeding','routine','wishlist','memo'].forEach(t=>document.getElementById(t+'-card').onclick=()=>openEditor2(t));
+document.getElementById('token-save').onclick=async()=>{const t=document.getElementById('token-input').value.trim();if(!t)return;await window.hyeona.setSettings({token:t});showDashboard2();refresh2()};
+const dump2=document.getElementById('brain-dump'),dumpStatus=document.getElementById('dump-status');
+async function saveDump2(){clearTimeout(dumpTimer2);const text=dump2.value;await window.hyeona.saveBrainDraft(text);dumpStatus.textContent='노션에 저장 중…';try{await window.hyeona.saveBrainDump(await token2(),text);dumpStatus.textContent='저장됨 ✓'}catch(e){dumpStatus.textContent='노션 저장 실패 · 내용은 이 PC에 보관됨'}}
+dump2.addEventListener('input',async()=>{await window.hyeona.saveBrainDraft(dump2.value);dumpStatus.textContent='입력 내용 보관됨';clearTimeout(dumpTimer2);dumpTimer2=setTimeout(saveDump2,500)});
+dump2.addEventListener('blur',saveDump2);
+window.addEventListener('focus',refresh2);
+(async()=>{const s=await window.hyeona.getSettings();if(s.token){token2cache=s.token;showDashboard2();await refresh2();refreshTimer2=setInterval(refresh2,30000)}else showSettings2()})();
 </script>
 </body>
 </html>

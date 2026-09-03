@@ -134,7 +134,7 @@ ipcMain.handle('dashboard:load', async (_e, token) => {
 
   const wishlist = wishRes.results.map((p) => ({
     id: p.id,
-    name: plainTitle(p.properties['이름']),
+    title: plainTitle(p.properties['이름']),
     status: p.properties['상태']?.status?.name || '',
   }));
   const wishlistActive = wishlist.filter((w) => w.status !== '완료').length;

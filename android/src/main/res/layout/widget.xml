@@ -7,23 +7,23 @@
     android:padding="14dp"
     android:background="@drawable/widget_bg">
 
-    <LinearLayout android:layout_width="match_parent" android:layout_height="48dp" android:orientation="horizontal" android:gravity="center_vertical">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="56dp" android:orientation="horizontal" android:gravity="center_vertical">
         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="LIFE.....IS A BITCH  🧊  😎" android:textSize="9sp" android:textStyle="bold" android:textColor="#6C8991" />
-            <TextView android:id="@+id/month_title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="9월" android:textSize="22sp" android:textStyle="bold" android:textColor="#20363B" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="LIFE.....IS A BITCH  🧊  😎" android:textSize="11sp" android:textStyle="bold" android:textColor="#6C8991" />
+            <TextView android:id="@+id/month_title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="9월" android:textSize="30sp" android:textStyle="bold" android:textColor="#20363B" />
         </LinearLayout>
-        <TextView android:id="@+id/add_button" android:layout_width="42dp" android:layout_height="42dp" android:gravity="center" android:text="＋" android:textSize="24sp" android:textColor="#20363B" />
-        <TextView android:id="@+id/refresh_button" android:layout_width="42dp" android:layout_height="42dp" android:gravity="center" android:text="↻" android:textSize="20sp" android:textColor="#52777D" />
+        <TextView android:id="@+id/add_button" android:layout_width="48dp" android:layout_height="48dp" android:gravity="center" android:text="＋" android:textSize="28sp" android:textColor="#20363B" />
+        <TextView android:id="@+id/refresh_button" android:layout_width="48dp" android:layout_height="48dp" android:gravity="center" android:text="↻" android:textSize="24sp" android:textColor="#52777D" />
     </LinearLayout>
 
-    <LinearLayout android:layout_width="match_parent" android:layout_height="22dp" android:orientation="horizontal">
-        <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="일" android:textSize="9sp" android:textColor="#C96873" />
-        <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="월" android:textSize="9sp" android:textColor="#6C7E84" />
-        <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="화" android:textSize="9sp" android:textColor="#6C7E84" />
-        <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="수" android:textSize="9sp" android:textColor="#6C7E84" />
-        <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="목" android:textSize="9sp" android:textColor="#6C7E84" />
-        <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="금" android:textSize="9sp" android:textColor="#6C7E84" />
-        <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="토" android:textSize="9sp" android:textColor="#4F94AF" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="28dp" android:orientation="horizontal">
+        <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="일" android:textSize="12sp" android:textColor="#C96873" />
+        <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="월" android:textSize="12sp" android:textColor="#6C7E84" />
+        <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="화" android:textSize="12sp" android:textColor="#6C7E84" />
+        <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="수" android:textSize="12sp" android:textColor="#6C7E84" />
+        <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="목" android:textSize="12sp" android:textColor="#6C7E84" />
+        <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="금" android:textSize="12sp" android:textColor="#6C7E84" />
+        <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="토" android:textSize="12sp" android:textColor="#4F94AF" />
     </LinearLayout>
 
     <LinearLayout android:id="@+id/week1" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal" />
@@ -35,23 +35,23 @@
 
     <TextView android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="4dp" android:layout_marginBottom="5dp" android:background="#3352777D" />
 
-    <LinearLayout android:layout_width="match_parent" android:layout_height="116dp" android:orientation="horizontal">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="150dp" android:orientation="horizontal">
         <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1.15" android:orientation="vertical" android:paddingRight="7dp">
-            <TextView android:id="@+id/today_title" android:layout_width="match_parent" android:layout_height="24dp" android:text="TODAY · 0" android:textSize="9sp" android:textStyle="bold" android:textColor="#6C8991" />
-            <LinearLayout android:id="@+id/row1" android:layout_width="match_parent" android:layout_height="28dp" android:orientation="horizontal" android:gravity="center_vertical"><TextView android:id="@+id/check1" android:layout_width="32dp" android:layout_height="28dp" android:gravity="center" android:text="○" android:textSize="18sp" android:textColor="#338E91"/><TextView android:id="@+id/text1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:maxLines="1" android:ellipsize="end" android:textSize="11sp" android:textColor="#263E43"/></LinearLayout>
-            <LinearLayout android:id="@+id/row2" android:layout_width="match_parent" android:layout_height="28dp" android:orientation="horizontal" android:gravity="center_vertical"><TextView android:id="@+id/check2" android:layout_width="32dp" android:layout_height="28dp" android:gravity="center" android:text="○" android:textSize="18sp" android:textColor="#338E91"/><TextView android:id="@+id/text2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:maxLines="1" android:ellipsize="end" android:textSize="11sp" android:textColor="#263E43"/></LinearLayout>
-            <LinearLayout android:id="@+id/row3" android:layout_width="match_parent" android:layout_height="28dp" android:orientation="horizontal" android:gravity="center_vertical"><TextView android:id="@+id/check3" android:layout_width="32dp" android:layout_height="28dp" android:gravity="center" android:text="○" android:textSize="18sp" android:textColor="#338E91"/><TextView android:id="@+id/text3" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:maxLines="1" android:ellipsize="end" android:textSize="11sp" android:textColor="#263E43"/></LinearLayout>
-            <TextView android:id="@+id/empty" android:layout_width="match_parent" android:layout_height="84dp" android:gravity="center" android:text="오늘 할 일이 없어요 ♡" android:textSize="10sp" android:textColor="#637B80" />
+            <TextView android:id="4762id/today_title" android:layout_width="match_parent" android:layout_height="30dp" android:text="TODAY · 0" android:textSize="11sp" android:textStyle="bold" android:textColor="#6C8991" />
+            <LinearLayout android:id="@+id/row1" android:layout_width="match_parent" android:layout_height="36dp" android:orientation="horizontal" android:gravity="center_vertical"><TextView android:id="@+id/check1" android:layout_width="32dp" android:layout_height="36dp" android:gravity="center" android:text="○" android:textSize="22sp" android:textColor="#338E91"/><TextView android:id="@+id/text1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:maxLines="1" android:ellipsize="end" android:textSize="14sp" android:textColor="#263E43"/></LinearLayout>
+            <LinearLayout android:id="@+id/row2" android:layout_width="match_parent" android:layout_height="36dp" android:orientation="horizontal" android:gravity="center_vertical"><TextView android:id="@+id/check2" android:layout_width="32dp" android:layout_height="36dp" android:gravity="center" android:text="○" android:textSize="22sp" android:textColor="#338E91"/><TextView android:id="@+id/text2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:maxLines="1" android:ellipsize="end" android:textSize="14sp" android:textColor="#263E43"/></LinearLayout>
+            <LinearLayout android:id="@+id/row3" android:layout_width="match_parent" android:layout_height="36dp" android:orientation="horizontal" android:gravity="center_vertical"><TextView android:id="@+id/check3" android:layout_width="32dp" android:layout_height="36dp" android:gravity="center" android:text="○" android:textSize="22sp" android:textColor="#338E91"/><TextView android:id="@+id/text3" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:maxLines="1" android:ellipsize="end" android:textSize="14sp" android:textColor="#263E43"/></LinearLayout>
+            <TextView android:id="@+id/empty" android:layout_width="match_parent" android:layout_height="110dp" android:gravity="center" android:text="오늘 할 일이 없어요 ♡" android:textSize="13sp" android:textColor="#637B80" />
         </LinearLayout>
         <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight=".85" android:orientation="vertical" android:paddingLeft="7dp">
-            <TextView android:layout_width="match_parent" android:layout_height="24dp" android:text="MEMO" android:textSize="9sp" android:textStyle="bold" android:textColor="#6C8991" />
-            <TextView android:id="@+id/memo_summary" android:layout_width="match_parent" android:layout_height="match_parent" android:maxLines="5" android:ellipsize="end" android:text="메모가 없어요" android:textSize="10sp" android:lineSpacingExtra="3dp" android:textColor="#263E43" />
+            <TextView android:layout_width="match_parent" android:layout_height="30dp" android:text="MEMO" android:textSize="11sp" android:textStyle="bold" android:textColor="#6C8991" />
+            <TextView android:id="@+id/memo_summary" android:layout_width="match_parent" android:layout_height="match_parent" android:maxLines="5" android:ellipsize="end" android:text="메모가 없어요" android:textSize="13sp" android:lineSpacingExtra="4dp" android:textColor="#263E43" />
         </LinearLayout>
     </LinearLayout>
 
-    <LinearLayout android:layout_width="match_parent" android:layout_height="48dp" android:orientation="horizontal" android:gravity="center_vertical">
-        <TextView android:id="@+id/wish_summary" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:maxLines="2" android:text="♡  WISH\n0개" android:textSize="9sp" android:textColor="#8D5969" />
-        <TextView android:id="@+id/money_summary" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:maxLines="2" android:text="₩  BLEEDING\n0만원" android:textSize="9sp" android:textColor="#355A65" />
-        <TextView android:id="@+id/brain_summary" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:maxLines="2" android:ellipsize="end" android:text="⌁  BRAIN DUMP\n빠른 메모" android:textSize="9sp" android:textColor="#355A65" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="64dp" android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/wish_summary" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:maxLines="2" android:text="♡  WISH\n0개" android:textSize="12sp" android:textColor="#8D5969" />
+        <TextView android:id="@+id/money_summary" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:maxLines="2" android:text="₩  BLEEDING\n0만원" android:textSize="12sp" android:textColor="#355A65" />
+        <TextView android:id="@+id/brain_summary" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:maxLines="2" android:ellipsize="end" android:text="⌁  BRAIN DUMP\n빠른 메모" android:textSize="12sp" android:textColor="#355A65" />
     </LinearLayout>
 </LinearLayout>

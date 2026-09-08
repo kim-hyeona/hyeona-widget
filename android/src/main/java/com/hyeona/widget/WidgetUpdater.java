@@ -77,11 +77,13 @@ public final class WidgetUpdater {
         Calendar grid = Calendar.getInstance();
         grid.set(Calendar.DAY_OF_MONTH, 1);
         int first = grid.get(Calendar.DAY_OF_WEEK) - 1;
+        int weeksNeeded = (int) Math.ceil((first + grid.getActualMaximum(Calendar.DAY_OF_MONTH)) / 7.0);
         grid.add(Calendar.DAY_OF_MONTH, -first);
         String todayKey = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date());
         List<Event> today = byDate.containsKey(todayKey) ? byDate.get(todayKey) : new ArrayList<>();
 
         for (int week = 0; week < 6; week++) {
+            v.setViewVisibility(WEEKS[week], week < weeksNeeded ? View.VISIBLE : View.GONE);
             v.removeAllViews(WEEKS[week]);
             for (int day = 0; day < 7; day++) {
                 RemoteViews cell = new RemoteViews(c.getPackageName(), R.layout.widget_day);

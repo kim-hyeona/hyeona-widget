@@ -24,7 +24,7 @@
         android:maxLines="2"
         android:ellipsize="end"
         android:text=""
-        android:textSize="11sp"
+        android:textSize="13sp"
         android:textColor="#355A65"
         android:background="#99CBE7ED" />
 </LinearLayout>

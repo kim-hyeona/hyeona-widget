@@ -333,7 +333,7 @@ const TYPE_META={
   memo:{title:'MEMO',button:'메모 추가',fields:['title']},
 };
 const esc2=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const today2=()=>new Date().toISOString().slice(0,10);
+const today2=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};
 async function token2(){return (await window.hyeona.getSettings()).token}
 function fmtDate2(){const d=new Date(),days=['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];document.getElementById('day-label').textContent=days[d.getDay()];document.getElementById('date-pill').textContent=String(d.getMonth()+1).padStart(2,'0')+' · '+String(d.getDate()).padStart(2,'0')}
 function renderCalendar2(data,token){

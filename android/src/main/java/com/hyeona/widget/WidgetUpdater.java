@@ -42,25 +42,30 @@ public final class WidgetUpdater {
     static void update(Context c, AppWidgetManager m, int[] ids) {
         Executors.newSingleThreadExecutor().execute(() -> {
             String token = c.getSharedPreferences("prefs", Context.MODE_PRIVATE).getString("token", "");
+            int monthOffset = c.getSharedPreferences("prefs", Context.MODE_PRIVATE).getInt("widget_month_offset", 0);
+            Calendar displayMonth = Calendar.getInstance();
+            displayMonth.set(Calendar.DAY_OF_MONTH, 1);
+            displayMonth.add(Calendar.MONTH, monthOffset);
             Dashboard d = new Dashboard();
             if (token.isEmpty()) {
                 d.error = "앱을 열어 Notion 토큰을 저장해 주세요";
             } else {
-                try { d.events = fetchMonth(token); } catch (Exception e) { d.error = "캘린더 연결 확인"; }
+                try { d.events = fetchMonth(token, displayMonth); } catch (Exception e) { d.error = "캘린더 연결 확인"; }
                 try { d.money = fetchMoneySummary(token); } catch (Exception ignored) { }
                 try { d.wishes = fetchCount(token, WISHLIST_DB); } catch (Exception ignored) { }
                 try { d.memos = fetchMemos(token); } catch (Exception ignored) { }
                 try { d.brain = fetchBrain(token); } catch (Exception ignored) { }
             }
-            for (int id : ids) m.updateAppWidget(id, views(c, d));
+            for (int id : ids) m.updateAppWidget(id, views(c, d, displayMonth));
         });
     }
 
-    private static RemoteViews views(Context c, Dashboard d) {
+    private static RemoteViews views(Context c, Dashboard d, Calendar displayMonth) {
         RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget);
         Calendar now = Calendar.getInstance();
-        int month = now.get(Calendar.MONTH) + 1;
-        v.setTextViewText(R.id.month_title, month + "월");
+        int month = displayMonth.get(Calendar.MONTH) + 1;
+        String monthTitle = displayMonth.get(Calendar.YEAR) == now.get(Calendar.YEAR) ? month + "월" : displayMonth.get(Calendar.YEAR) + "년 " + month + "월";
+        v.setTextViewText(R.id.month_title, monthTitle);
 
         Intent open = new Intent(c, MainActivity.class);
         PendingIntent openPi = PendingIntent.getActivity(c, 1, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
@@ -68,14 +73,17 @@ public final class WidgetUpdater {
         v.setOnClickPendingIntent(R.id.add_button, openPi);
         Intent refresh = new Intent(c, WidgetProvider.class).setAction(WidgetProvider.ACTION_REFRESH);
         v.setOnClickPendingIntent(R.id.refresh_button, PendingIntent.getBroadcast(c, 2, refresh, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
+        Intent prev = new Intent(c, WidgetProvider.class).setAction(WidgetProvider.ACTION_PREV_MONTH);
+        Intent next = new Intent(c, WidgetProvider.class).setAction(WidgetProvider.ACTION_NEXT_MONTH);
+        v.setOnClickPendingIntent(R.id.prev_month, PendingIntent.getBroadcast(c, 3, prev, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
+        v.setOnClickPendingIntent(R.id.next_month, PendingIntent.getBroadcast(c, 4, next, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
 
         Map<String, List<Event>> byDate = new HashMap<>();
         for (Event e : d.events) {
             if (!byDate.containsKey(e.date)) byDate.put(e.date, new ArrayList<>());
             byDate.get(e.date).add(e);
         }
-        Calendar grid = Calendar.getInstance();
-        grid.set(Calendar.DAY_OF_MONTH, 1);
+        Calendar grid = (Calendar) displayMonth.clone();
         int first = grid.get(Calendar.DAY_OF_WEEK) - 1;
         int weeksNeeded = (int) Math.ceil((first + grid.getActualMaximum(Calendar.DAY_OF_MONTH)) / 7.0);
         grid.add(Calendar.DAY_OF_MONTH, -first);
@@ -88,7 +96,7 @@ public final class WidgetUpdater {
             for (int day = 0; day < 7; day++) {
                 RemoteViews cell = new RemoteViews(c.getPackageName(), R.layout.widget_day);
                 String key = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(grid.getTime());
-                boolean inMonth = grid.get(Calendar.MONTH) == now.get(Calendar.MONTH);
+                boolean inMonth = grid.get(Calendar.MONTH) == displayMonth.get(Calendar.MONTH) && grid.get(Calendar.YEAR) == displayMonth.get(Calendar.YEAR);
                 cell.setTextViewText(R.id.day_number, String.valueOf(grid.get(Calendar.DAY_OF_MONTH)));
                 int color = inMonth ? Color.rgb(38, 62, 67) : Color.rgb(178, 188, 190);
                 if (day == 0 && inMonth) color = Color.rgb(201, 104, 115);
@@ -136,9 +144,8 @@ public final class WidgetUpdater {
         return v;
     }
 
-    private static List<Event> fetchMonth(String token) throws Exception {
-        Calendar start = Calendar.getInstance();
-        start.set(Calendar.DAY_OF_MONTH, 1);
+    private static List<Event> fetchMonth(String token, Calendar selectedMonth) throws Exception {
+        Calendar start = (Calendar) selectedMonth.clone();
         Calendar end = (Calendar) start.clone();
         end.add(Calendar.MONTH, 1);
         SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
@@ -209,6 +216,13 @@ public final class WidgetUpdater {
             } catch (Exception ignored) { }
             updateAll(c);
         });
+    }
+
+    static void moveMonth(Context c, int amount) {
+        int current = c.getSharedPreferences("prefs", Context.MODE_PRIVATE).getInt("widget_month_offset", 0);
+        int next = Math.max(-24, Math.min(24, current + amount));
+        c.getSharedPreferences("prefs", Context.MODE_PRIVATE).edit().putInt("widget_month_offset", next).apply();
+        updateAll(c);
     }
 
     private static JSONObject request(String token, String method, String url, JSONObject body) throws Exception {

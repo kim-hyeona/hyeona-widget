@@ -8,10 +8,14 @@ import android.content.Intent;
 public class WidgetProvider extends AppWidgetProvider {
     public static final String ACTION_TOGGLE = "com.hyeona.widget.TOGGLE";
     public static final String ACTION_REFRESH = "com.hyeona.widget.REFRESH";
+    public static final String ACTION_PREV_MONTH = "com.hyeona.widget.PREV_MONTH";
+    public static final String ACTION_NEXT_MONTH = "com.hyeona.widget.NEXT_MONTH";
     @Override public void onUpdate(Context c, AppWidgetManager m, int[] ids) { WidgetUpdater.update(c, m, ids); }
     @Override public void onReceive(Context c, Intent i) {
         super.onReceive(c, i);
         if (ACTION_TOGGLE.equals(i.getAction())) WidgetUpdater.toggle(c, i.getStringExtra("page"), i.getBooleanExtra("done", false));
         if (ACTION_REFRESH.equals(i.getAction())) WidgetUpdater.updateAll(c);
+        if (ACTION_PREV_MONTH.equals(i.getAction())) WidgetUpdater.moveMonth(c, -1);
+        if (ACTION_NEXT_MONTH.equals(i.getAction())) WidgetUpdater.moveMonth(c, 1);
     }
 }

@@ -70,13 +70,10 @@ public final class WidgetUpdater {
         Intent open = new Intent(c, MainActivity.class);
         PendingIntent openPi = PendingIntent.getActivity(c, 1, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         v.setOnClickPendingIntent(R.id.container, openPi);
-        v.setOnClickPendingIntent(R.id.add_button, openPi);
-        Intent refresh = new Intent(c, WidgetProvider.class).setAction(WidgetProvider.ACTION_REFRESH);
-        v.setOnClickPendingIntent(R.id.refresh_button, PendingIntent.getBroadcast(c, 2, refresh, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
         Intent prev = new Intent(c, WidgetProvider.class).setAction(WidgetProvider.ACTION_PREV_MONTH);
         Intent next = new Intent(c, WidgetProvider.class).setAction(WidgetProvider.ACTION_NEXT_MONTH);
-        v.setOnClickPendingIntent(R.id.prev_month, PendingIntent.getBroadcast(c, 3, prev, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
-        v.setOnClickPendingIntent(R.id.next_month, PendingIntent.getBroadcast(c, 4, next, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
+        v.setOnClickPendingIntent(R.id.add_button, PendingIntent.getBroadcast(c, 3, prev, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
+        v.setOnClickPendingIntent(R.id.refresh_button, PendingIntent.getBroadcast(c, 4, next, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
 
         Map<String, List<Event>> byDate = new HashMap<>();
         for (Event e : d.events) {

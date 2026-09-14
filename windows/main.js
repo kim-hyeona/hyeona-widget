@@ -2,29 +2,40 @@ const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
-// ── 데이터베이스 / 페이지 ID ──────────────────────────────
-const CALENDAR_DB = '3cd946f45bc2803da355faf7751fb866';   // 캘린더 (이름/날짜/완료)
-const BLEEDING_DB = 'c07869fbaaa746a593663a5ff92ebd22';   // 가계부 (항목/월/금액(만원)/완료)
-const WISHLIST_DB = '3cd946f45bc280cb875cfe998bc81776';   // 물결 위시리스트
-const MEMO_DB = '3cd946f45bc280dbafaec68c50665447';       // 물결 메모
-const ROUTINE_DB = '9d7cbaca00274f12a6d016927ffb0296';    // 오늘의 루틴
-const BRAINDUMP_PAGE = '3ce946f45bc281ab9e97d2aa17504ea9'; // 브레인덤프 단일 행
+const CALENDAR_DB = '3cd946f45bc2803da355faf7751fb866';
+const BLEEDING_DB = 'c07869fbaaa746a593663a5ff92ebd22';
+const WISHLIST_DB = '3cd946f45bc280cb875cfe998bc81776';
+const MEMO_DB = '3cd946f45bc280dbafaec68c50665447';
+const ROUTINE_DB = '9d7cbaca00274f12a6d016927ffb0296';
+const BRAINDUMP_PAGE = '3ce946f45bc281ab9e97d2aa17504ea9';
 const GRIND_URL = 'https://app.notion.com/p/35b946f45bc280aba379da06addd2eec';
 const PACKAGING_URL = 'https://app.notion.com/p/35b946f45bc280d393f0ee3c366a283b';
 
 const settingsPath = () => path.join(app.getPath('userData'), 'settings.json');
+
 function loadSettings() {
-  try { return JSON.parse(fs.readFileSync(settingsPath(), 'utf8')); } catch { return {}; }
-}
-function saveSettings(s) {
-  fs.writeFileSync(settingsPath(), JSON.stringify(s));
+  try {
+    return JSON.parse(fs.readFileSync(settingsPath(), 'utf8'));
+  } catch {
+    return {};
+  }
 }
 
-async function notion(token, path_, method = 'GET', body) {
-  const res = await fetch(`https://api.notion.com/v1/${path_}`, {
+function saveSettings(next) {
+  fs.writeFileSync(settingsPath(), JSON.stringify(next));
+}
+
+function mergeSettings(patch) {
+  const next = Object.assign({}, loadSettings(), patch);
+  saveSettings(next);
+  return next;
+}
+
+async function notion(token, route, method = 'GET', body) {
+  const res = await fetch('https://api.notion.com/v1/' + route, {
     method,
     headers: {
-      Authorization: `Bearer ${token}`,
+      Authorization: 'Bearer ' + token,
       'Notion-Version': '2022-06-28',
       'Content-Type': 'application/json',
     },
@@ -36,26 +47,21 @@ async function notion(token, path_, method = 'GET', body) {
 }
 
 function plainTitle(prop) {
-  return (prop?.title || []).map((x) => x.plain_text).join('') || '';
-}
-function plainText(prop) {
-  return (prop?.rich_text || []).map((x) => x.plain_text).join('') || '';
+  return (prop && prop.title || []).map((x) => x.plain_text).join('') || '';
 }
 
-// 2주치 날짜 배열 (이번 주 일요일 ~ 13일 뒤)
-function twoWeekRange() {
-  const today = new Date();
-  const day = today.getDay();
-  const start = new Date(today);
-  start.setDate(today.getDate() - day);
-  const days = [];
-  for (let i = 0; i < 14; i++) {
-    const d = new Date(start);
-    d.setDate(start.getDate() + i);
-    days.push(d);
-  }
-  return days;
+function plainText(prop) {
+  return (prop && prop.rich_text || []).map((x) => x.plain_text).join('') || '';
 }
+
+function pageTitle(page) {
+  const props = page && page.properties || {};
+  for (const value of Object.values(props)) {
+    if (value && value.type === 'title') return plainTitle(value);
+  }
+  return '';
+}
+
 function ymd(d) {
   return [
     d.getFullYear(),
@@ -64,137 +70,216 @@ function ymd(d) {
   ].join('-');
 }
 
-ipcMain.handle('dashboard:load', async (_e, token) => {
+function twoWeekRange() {
+  const today = new Date();
+  const start = new Date(today);
+  start.setHours(12, 0, 0, 0);
+  start.setDate(today.getDate() - today.getDay());
+  return Array.from({ length: 14 }, (_, index) => {
+    const d = new Date(start);
+    d.setDate(start.getDate() + index);
+    return d;
+  });
+}
+
+async function safeLoad(errors, label, fn, fallback) {
+  try {
+    return await fn();
+  } catch (error) {
+    errors.push(label + ': ' + error.message);
+    return fallback;
+  }
+}
+
+ipcMain.handle('dashboard:load', async (_event, token) => {
   const days = twoWeekRange();
   const rangeStart = ymd(days[0]);
   const rangeEnd = ymd(days[13]);
   const todayStr = ymd(new Date());
-  const monthLabel = `${new Date().getMonth() + 1}월`;
+  const monthLabel = String(new Date().getMonth() + 1) + '월';
   const errors = [];
 
-  async function safe(label, fn, fallback) {
-    try { return await fn(); } catch (e) { errors.push(`${label}: ${e.message}`); return fallback; }
-  }
+  const results = await Promise.all([
+    safeLoad(errors, '캘린더', () => notion(token, 'databases/' + CALENDAR_DB + '/query', 'POST', {
+      page_size: 100,
+      filter: {
+        and: [
+          { property: '날짜', date: { on_or_after: rangeStart } },
+          { property: '날짜', date: { on_or_before: rangeEnd } },
+        ],
+      },
+    }), { results: [] }),
+    safeLoad(errors, '가계부', () => notion(token, 'databases/' + BLEEDING_DB + '/query', 'POST', {
+      page_size: 100,
+      filter: { property: '월', select: { equals: monthLabel } },
+    }), { results: [] }),
+    safeLoad(errors, '위시리스트', () => notion(token, 'databases/' + WISHLIST_DB + '/query', 'POST', {
+      page_size: 50,
+    }), { results: [] }),
+    safeLoad(errors, '메모', () => notion(token, 'databases/' + MEMO_DB + '/query', 'POST', {
+      page_size: 50,
+      sorts: [{ timestamp: 'created_time', direction: 'descending' }],
+    }), { results: [] }),
+    safeLoad(errors, '평일 루틴', () => notion(token, 'databases/' + ROUTINE_DB + '/query', 'POST', {
+      page_size: 50,
+    }), { results: [] }),
+    safeLoad(errors, '브레인덤프', () => notion(token, 'pages/' + BRAINDUMP_PAGE), { properties: {} }),
+  ]);
 
-  const calRes = await safe('캘린더', () => notion(token, `databases/${CALENDAR_DB}/query`, 'POST', {
-    page_size: 100,
-    filter: {
-      and: [
-        { property: '날짜', date: { on_or_after: rangeStart } },
-        { property: '날짜', date: { on_or_before: rangeEnd } },
-      ],
-    },
-  }), { results: [] });
-
-  const bleedRes = await safe('가계부', () => notion(token, `databases/${BLEEDING_DB}/query`, 'POST', {
-    page_size: 100,
-    filter: { property: '월', select: { equals: monthLabel } },
-  }), { results: [] });
-
-  const wishRes = await safe('위시리스트', () => notion(token, `databases/${WISHLIST_DB}/query`, 'POST', { page_size: 50 }), { results: [] });
-
-  const memoRes = await safe('메모', () => notion(token, `databases/${MEMO_DB}/query`, 'POST', {
-    page_size: 50,
-    sorts: [{ timestamp: 'created_time', direction: 'descending' }],
-  }), { results: [] });
-
-  const routineRes = await safe('루틴', () => notion(token, `databases/${ROUTINE_DB}/query`, 'POST', { page_size: 20 }), { results: [] });
-
-  const dumpRes = await safe('브레인덤프', () => notion(token, `pages/${BRAINDUMP_PAGE}`), { properties: {} });
+  const calRes = results[0];
+  const bleedRes = results[1];
+  const wishRes = results[2];
+  const memoRes = results[3];
+  const routineRes = results[4];
+  const dumpRes = results[5];
 
   const events = calRes.results.map((p) => ({
     id: p.id,
     title: plainTitle(p.properties['이름']) || '할 일',
-    done: !!p.properties['완료']?.checkbox,
-    date: p.properties['날짜']?.date?.start || '',
+    done: !!(p.properties['완료'] && p.properties['완료'].checkbox),
+    date: p.properties['날짜'] && p.properties['날짜'].date ? p.properties['날짜'].date.start : '',
   }));
 
   const calendarDays = days.map((d) => {
-    const key = ymd(d);
-    const dayEvents = events.filter((e) => e.date === key);
+    const date = ymd(d);
     return {
-      date: key,
+      date,
       day: d.getDate(),
-      isToday: key === todayStr,
-      hasEvent: dayEvents.length > 0,
-      events: dayEvents,
+      isToday: date === todayStr,
+      events: events.filter((item) => item.date === date),
     };
   });
-  const todayEvents = events.filter((e) => e.date === todayStr);
 
   let bleedingSum = 0;
   const bleedingItems = bleedRes.results.map((p) => {
-    const amount = p.properties['금액(만원)']?.number || 0;
+    const amount = p.properties['금액(만원)'] && p.properties['금액(만원)'].number || 0;
     bleedingSum += amount;
     return {
       id: p.id,
       title: plainTitle(p.properties['항목']),
       amount,
       memo: plainText(p.properties['메모']),
-      month: p.properties['월']?.select?.name || monthLabel,
-      done: !!p.properties['완료']?.checkbox,
+      month: p.properties['월'] && p.properties['월'].select ? p.properties['월'].select.name : monthLabel,
+      done: !!(p.properties['완료'] && p.properties['완료'].checkbox),
     };
   });
 
   const wishlist = wishRes.results.map((p) => ({
     id: p.id,
     title: plainTitle(p.properties['이름']),
-    status: p.properties['상태']?.status?.name || '',
+    status: p.properties['상태'] && p.properties['상태'].status ? p.properties['상태'].status.name : '',
   }));
-  const wishlistActive = wishlist.filter((w) => w.status !== '완료').length;
 
   const memo = memoRes.results.map((p) => ({
     id: p.id,
     title: plainTitle(p.properties['제목']),
+    createdTime: p.created_time,
   }));
 
   const routine = routineRes.results.map((p) => ({
     id: p.id,
     title: plainTitle(p.properties['항목']),
-    done: !!p.properties['완료']?.checkbox,
+    done: !!(p.properties['완료'] && p.properties['완료'].checkbox),
   }));
-  const routineDone = routine.filter((r) => r.done).length;
 
-  const notionBrainDump = plainText(dumpRes.properties['내용']);
-  const localSettings = loadSettings();
-  const brainDump = typeof localSettings.brainDraft === 'string' ? localSettings.brainDraft : notionBrainDump;
+  const remoteBrainDump = plainText(dumpRes.properties && dumpRes.properties['내용']);
+  const settings = loadSettings();
+  const brainDump = settings.brainDraftDirty && typeof settings.brainDraft === 'string'
+    ? settings.brainDraft
+    : remoteBrainDump;
+
+  if (!settings.brainDraftDirty && settings.brainDraft !== remoteBrainDump) {
+    mergeSettings({ brainDraft: remoteBrainDump });
+  }
 
   return {
     monthLabel,
     calendarDays,
-    todayEvents,
+    todayEvents: events.filter((item) => item.date === todayStr),
     events,
     bleeding: { sum: bleedingSum, monthLabel, items: bleedingItems },
-    wishlist: { active: wishlistActive, total: wishlist.length, items: wishlist },
+    wishlist: {
+      active: wishlist.filter((item) => item.status !== '완료').length,
+      total: wishlist.length,
+      items: wishlist,
+    },
     memo,
-    routine: { items: routine, done: routineDone, total: routine.length },
+    routine: {
+      items: routine,
+      done: routine.filter((item) => item.done).length,
+      total: routine.length,
+    },
     brainDump,
     links: { grind: GRIND_URL, packaging: PACKAGING_URL },
     errors,
   };
 });
 
-ipcMain.handle('task:toggle', async (_e, token, id, done) => {
-  await notion(token, `pages/${id}`, 'PATCH', { properties: { 완료: { checkbox: done } } });
-  return true;
-});
-ipcMain.handle('routine:toggle', async (_e, token, id, done) => {
-  await notion(token, `pages/${id}`, 'PATCH', { properties: { 완료: { checkbox: done } } });
-  return true;
-});
-ipcMain.handle('bleeding:toggle', async (_e, token, id, done) => {
-  await notion(token, `pages/${id}`, 'PATCH', { properties: { 완료: { checkbox: done } } });
-  return true;
-});
-ipcMain.handle('braindump:save', async (_e, token, text) => {
-  await notion(token, `pages/${BRAINDUMP_PAGE}`, 'PATCH', {
-    properties: { 내용: { rich_text: [{ text: { content: text.slice(0, 1900) } }] } },
+ipcMain.handle('weather:load', async (_event, latitude, longitude) => {
+  const lat = Number.isFinite(Number(latitude)) ? Number(latitude) : 37.5665;
+  const lon = Number.isFinite(Number(longitude)) ? Number(longitude) : 126.9780;
+  const params = new URLSearchParams({
+    latitude: String(lat),
+    longitude: String(lon),
+    current: 'temperature_2m,weather_code',
+    daily: 'weather_code,temperature_2m_max,temperature_2m_min',
+    timezone: 'auto',
+    forecast_days: '4',
   });
+  const res = await fetch('https://api.open-meteo.com/v1/forecast?' + params.toString());
+  if (!res.ok) throw new Error('날씨를 불러오지 못했어요.');
+  const data = await res.json();
+  return {
+    current: {
+      temperature: Math.round(data.current.temperature_2m),
+      code: data.current.weather_code,
+    },
+    daily: data.daily.time.map((date, index) => ({
+      date,
+      code: data.daily.weather_code[index],
+      max: Math.round(data.daily.temperature_2m_max[index]),
+      min: Math.round(data.daily.temperature_2m_min[index]),
+    })).slice(1, 4),
+  };
+});
+
+ipcMain.handle('notion:dashboard-page', async (_event, token) => {
+  const result = await notion(token, 'search', 'POST', {
+    query: 'life is bitch',
+    filter: { property: 'object', value: 'page' },
+    page_size: 50,
+  });
+  const pages = result.results || [];
+  const exact = pages.find((page) => pageTitle(page).trim().toLowerCase() === 'life is bitch');
+  const candidate = exact || pages[0];
+  if (!candidate || !candidate.url) {
+    throw new Error('노션에서 life is bitch 페이지를 찾지 못했어요.');
+  }
+  await shell.openExternal(candidate.url);
+  return candidate.url;
+});
+
+ipcMain.handle('task:toggle', async (_event, token, id, done) => {
+  await notion(token, 'pages/' + id, 'PATCH', { properties: { 완료: { checkbox: done } } });
   return true;
 });
-ipcMain.handle('braindump:draft', (_e, text) => {
-  const s = loadSettings();
-  saveSettings({ ...s, brainDraft: String(text).slice(0, 1900) });
+
+ipcMain.handle('routine:toggle', async (_event, token, id, done) => {
+  await notion(token, 'pages/' + id, 'PATCH', { properties: { 완료: { checkbox: done } } });
+  return true;
+});
+
+ipcMain.handle('braindump:save', async (_event, token, text) => {
+  const value = String(text || '').slice(0, 1900);
+  await notion(token, 'pages/' + BRAINDUMP_PAGE, 'PATCH', {
+    properties: { 내용: { rich_text: value ? [{ text: { content: value } }] : [] } },
+  });
+  mergeSettings({ brainDraft: value, brainDraftDirty: false });
+  return true;
+});
+
+ipcMain.handle('braindump:draft', (_event, text) => {
+  mergeSettings({ brainDraft: String(text || '').slice(0, 1900), brainDraftDirty: true });
   return true;
 });
 
@@ -205,75 +290,113 @@ const TYPES = {
   memo: { db: MEMO_DB, title: '제목' },
   routine: { db: ROUTINE_DB, title: '항목' },
 };
+
 function typeConfig(type) {
   const config = TYPES[type];
   if (!config) throw new Error('지원하지 않는 항목이에요.');
   return config;
 }
+
 function itemProperties(type, payload, partial = false) {
-  const c = typeConfig(type);
+  const config = typeConfig(type);
   const props = {};
+
   if (!partial || payload.title !== undefined) {
-    props[c.title] = { title: [{ text: { content: String(payload.title || '').slice(0, 500) } }] };
+    props[config.title] = {
+      title: [{ text: { content: String(payload.title || '').slice(0, 500) } }],
+    };
   }
-  if (payload.done !== undefined && ['calendar','bleeding','routine'].includes(type)) {
+  if (payload.done !== undefined && ['calendar', 'bleeding', 'routine'].includes(type)) {
     props['완료'] = { checkbox: !!payload.done };
   }
-  if (type === 'calendar' && payload.date !== undefined) props['날짜'] = { date: { start: payload.date } };
+  if (type === 'calendar' && payload.date !== undefined) {
+    props['날짜'] = { date: { start: payload.date } };
+  }
   if (type === 'bleeding') {
     if (payload.amount !== undefined) props['금액(만원)'] = { number: Number(payload.amount) || 0 };
     if (payload.month !== undefined) props['월'] = { select: { name: payload.month } };
-    if (payload.memo !== undefined) props['메모'] = { rich_text: [{ text: { content: String(payload.memo).slice(0, 1000) } }] };
+    if (payload.memo !== undefined) {
+      props['메모'] = { rich_text: [{ text: { content: String(payload.memo).slice(0, 1000) } }] };
+    }
   }
-  if (type === 'wishlist' && payload.status !== undefined) props['상태'] = { status: { name: payload.status } };
+  if (type === 'wishlist' && payload.status !== undefined) {
+    props['상태'] = { status: { name: payload.status } };
+  }
   return props;
 }
-ipcMain.handle('item:create', async (_e, token, type, payload) => {
-  const c = typeConfig(type);
-  return notion(token, 'pages', 'POST', { parent: { database_id: c.db }, properties: itemProperties(type, payload) });
+
+ipcMain.handle('item:create', async (_event, token, type, payload) => {
+  const config = typeConfig(type);
+  return notion(token, 'pages', 'POST', {
+    parent: { database_id: config.db },
+    properties: itemProperties(type, payload),
+  });
 });
-ipcMain.handle('item:update', async (_e, token, type, id, payload) => {
-  return notion(token, `pages/${id}`, 'PATCH', { properties: itemProperties(type, payload, true) });
+
+ipcMain.handle('item:update', async (_event, token, type, id, payload) => {
+  return notion(token, 'pages/' + id, 'PATCH', {
+    properties: itemProperties(type, payload, true),
+  });
 });
-ipcMain.handle('item:delete', async (_e, token, id) => {
-  return notion(token, `pages/${id}`, 'PATCH', { archived: true });
+
+ipcMain.handle('item:delete', async (_event, token, id) => {
+  return notion(token, 'pages/' + id, 'PATCH', { archived: true });
 });
-ipcMain.handle('link:open', async (_e, url) => {
-  shell.openExternal(url);
-});
+
+ipcMain.handle('link:open', async (_event, url) => shell.openExternal(url));
+
 ipcMain.handle('settings:get', () => loadSettings());
-ipcMain.handle('settings:set', (_e, s) => {
-  saveSettings(s);
+
+ipcMain.handle('settings:set', (_event, patch) => {
+  mergeSettings(patch || {});
   return true;
 });
 
 let win;
-function create() {
+
+function createWindow() {
   win = new BrowserWindow({
-    width: 1180,
-    height: 760,
-    minWidth: 900,
-    minHeight: 600,
+    width: 1500,
+    height: 960,
+    minWidth: 1080,
+    minHeight: 700,
     title: "hyeona's dashboard",
     autoHideMenuBar: true,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#fefcfb',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       sandbox: true,
     },
   });
+
   win.loadFile('index.html');
+
   const menu = Menu.buildFromTemplate([
-    { label: '항상 위에 고정', type: 'checkbox', click: (i) => win.setAlwaysOnTop(i.checked) },
+    {
+      label: '항상 위에 고정',
+      type: 'checkbox',
+      click: (item) => win.setAlwaysOnTop(item.checked),
+    },
     { label: '새로고침', click: () => win.reload() },
-    { label: '토큰 다시 설정', click: () => { saveSettings({}); win.reload(); } },
+    {
+      label: '토큰 다시 설정',
+      click: () => {
+        const settings = loadSettings();
+        delete settings.token;
+        saveSettings(settings);
+        win.reload();
+      },
+    },
     { type: 'separator' },
     { label: '종료', click: () => app.quit() },
   ]);
+
   win.webContents.on('context-menu', () => menu.popup());
 }
-app.whenReady().then(create);
+
+app.whenReady().then(createWindow);
+
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });

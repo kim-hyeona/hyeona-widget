@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" spellcheck="false">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -504,7 +504,7 @@ button:disabled { cursor:wait; opacity:.55; }
 }
 </style>
 </head>
-<body>
+<body spellcheck="false">
 <section id="settings-screen">
   <div class="settings-box">
     <h1>노션을 연결해줘</h1>
@@ -571,7 +571,7 @@ button:disabled { cursor:wait; opacity:.55; }
         <div class="section-head">
           <div class="calendar-title">
             <span class="month-label" id="month-label">9월</span>
-            <span class="month-nav"><button title="이전">‹</button><button title="다음">›</button></span>
+            <span class="month-nav"><button id="calendar-prev" title="이전 2주" aria-label="이전 2주">‹</button><button id="calendar-next" title="다음 2주" aria-label="다음 2주">›</button></span>
           </div>
           <button class="mini-action" id="calendar-add">＋ 일정</button>
         </div>
@@ -648,10 +648,21 @@ let state = {
   activeType:null,
   refreshing:false,
   brainTimer:null,
-  weatherTimer:null
+  weatherTimer:null,
+  calendarOffset:0
 };
 
 const byId = (id) => document.getElementById(id);
+function disableSpellcheck(root = document) {
+  root.querySelectorAll('input,textarea,[contenteditable="true"]').forEach((element) => {
+    element.setAttribute('spellcheck','false');
+    element.spellcheck = false;
+  });
+}
+const spellcheckObserver = new MutationObserver(() => disableSpellcheck());
+spellcheckObserver.observe(document.body,{ childList:true, subtree:true });
+disableSpellcheck();
+
 const escapeHtml = (value) => String(value == null ? '' : value).replace(/[&<>"']/g, (char) => ({
   '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
 }[char]));
@@ -850,7 +861,7 @@ async function refreshDashboard() {
   byId('sync-status').textContent = '노션 동기화 중…';
   byId('refresh-button').disabled = true;
   try {
-    const data = await window.hyeona.load(state.token);
+    const data = await window.hyeona.load(state.token, state.calendarOffset);
     state.data = data;
     renderDashboard(data);
     updateErrors(data.errors);
@@ -1049,6 +1060,16 @@ byId('token-save').onclick = async () => {
 };
 
 byId('refresh-button').onclick = refreshDashboard;
+byId('calendar-prev').onclick = async () => {
+  if (state.refreshing) return;
+  state.calendarOffset -= 1;
+  await refreshDashboard();
+};
+byId('calendar-next').onclick = async () => {
+  if (state.refreshing) return;
+  state.calendarOffset += 1;
+  await refreshDashboard();
+};
 byId('location-button').onclick = useCurrentLocation;
 byId('bleeding-card').onclick = () => openEditor('bleeding');
 byId('wishlist-card').onclick = () => openEditor('wishlist');

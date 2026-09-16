@@ -333,28 +333,41 @@ button:disabled { cursor:wait; opacity:.55; }
 .progress-bar { height:100%; width:0; border-radius:inherit; background:var(--blue-strong); transition:width .25s ease; }
 
 #memo-list {
-  display:flex;
-  flex-direction:column;
-  gap:7px;
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  grid-auto-rows:minmax(74px,auto);
+  gap:10px;
   max-height:198px;
   overflow:auto;
-  padding:1px 2px 2px;
+  padding:2px 2px 4px;
 }
 .memo-item {
-  min-height:46px;
+  min-width:0;
   display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-  padding:9px 11px;
-  border-radius:9px;
-  background:var(--blue);
+  align-items:flex-start;
+  padding:14px 15px;
+  border:1px solid var(--line);
+  border-radius:11px;
+  background:rgba(255,254,253,.88);
   cursor:pointer;
+  transition:border-color .16s ease,transform .16s ease,background .16s ease;
 }
-.memo-item:nth-child(3n+2) { background:var(--pink); }
-.memo-item:nth-child(3n) { background:#f6f3f2; }
-.memo-title { overflow:hidden; font-size:12px; line-height:1.45; }
-.memo-more { color:#aaa19c; letter-spacing:.15em; }
+.memo-item:hover {
+  border-color:#ded4cf;
+  background:#fff;
+  transform:translateY(-1px);
+}
+.memo-title {
+  overflow:hidden;
+  display:-webkit-box;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:3;
+  font-family:Georgia,"Noto Serif KR","Batang",serif;
+  font-size:14px;
+  line-height:1.58;
+  word-break:keep-all;
+  overflow-wrap:anywhere;
+}
 
 .brain-section {
   min-height:628px;
@@ -737,12 +750,10 @@ function renderMemo(items) {
     list.innerHTML = '<div class="empty">메모가 없어요</div>';
     return;
   }
-  items.slice(0,5).forEach((memo) => {
+  items.slice(0,6).forEach((memo) => {
     const element = document.createElement('div');
     element.className = 'memo-item';
-    element.innerHTML =
-      '<span class="memo-title">' + escapeHtml(memo.title) + '</span>' +
-      '<span class="memo-more">···</span>';
+    element.innerHTML = '<span class="memo-title">' + escapeHtml(memo.title) + '</span>';
     element.addEventListener('click', () => openEditor('memo'));
     list.appendChild(element);
   });

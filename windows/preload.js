@@ -1,7 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('hyeona', {
-  load: (token) => ipcRenderer.invoke('dashboard:load', token),
+  load: (token, offsetWeeks = 0) => ipcRenderer.invoke('dashboard:load', token, offsetWeeks),
   loadWeather: (latitude, longitude) => ipcRenderer.invoke('weather:load', latitude, longitude),
   openNotionDashboard: (token) => ipcRenderer.invoke('notion:dashboard-page', token),
   toggleTask: (token, id, done) => ipcRenderer.invoke('task:toggle', token, id, done),

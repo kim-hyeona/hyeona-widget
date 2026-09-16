@@ -70,11 +70,11 @@ function ymd(d) {
   ].join('-');
 }
 
-function twoWeekRange() {
+function twoWeekRange(offsetWeeks = 0) {
   const today = new Date();
   const start = new Date(today);
   start.setHours(12, 0, 0, 0);
-  start.setDate(today.getDate() - today.getDay());
+  start.setDate(today.getDate() - today.getDay() + (Number(offsetWeeks) || 0) * 14);
   return Array.from({ length: 14 }, (_, index) => {
     const d = new Date(start);
     d.setDate(start.getDate() + index);
@@ -91,12 +91,12 @@ async function safeLoad(errors, label, fn, fallback) {
   }
 }
 
-ipcMain.handle('dashboard:load', async (_event, token) => {
-  const days = twoWeekRange();
+ipcMain.handle('dashboard:load', async (_event, token, offsetWeeks = 0) => {
+  const days = twoWeekRange(offsetWeeks);
   const rangeStart = ymd(days[0]);
   const rangeEnd = ymd(days[13]);
   const todayStr = ymd(new Date());
-  const monthLabel = String(new Date().getMonth() + 1) + '월';
+  const monthLabel = String(days[7].getMonth() + 1) + '월';
   const errors = [];
 
   const results = await Promise.all([
@@ -192,10 +192,25 @@ ipcMain.handle('dashboard:load', async (_event, token) => {
     mergeSettings({ brainDraft: remoteBrainDump });
   }
 
+  async function loadTodayEvents() {
+    const visibleToday = events.filter((item) => item.date === todayStr);
+    if (calendarDays.some((day) => day.isToday)) return visibleToday;
+    const todayRes = await safeLoad(errors, '오늘 일정', () => notion(token, 'databases/' + CALENDAR_DB + '/query', 'POST', {
+      page_size: 100,
+      filter: { property: '날짜', date: { equals: todayStr } },
+    }), { results: [] });
+    return todayRes.results.map((p) => ({
+      id: p.id,
+      title: plainTitle(p.properties['이름']) || '할 일',
+      done: !!(p.properties['완료'] && p.properties['완료'].checkbox),
+      date: p.properties['날짜'] && p.properties['날짜'].date ? p.properties['날짜'].date.start : '',
+    }));
+  }
+
   return {
     monthLabel,
     calendarDays,
-    todayEvents: events.filter((item) => item.date === todayStr),
+    todayEvents: await loadTodayEvents(),
     events,
     bleeding: { sum: bleedingSum, monthLabel, items: bleedingItems },
     wishlist: {
@@ -367,6 +382,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       sandbox: true,
+      spellcheck: false,
     },
   });
 

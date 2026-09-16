@@ -97,6 +97,7 @@ ipcMain.handle('dashboard:load', async (_event, token, offsetWeeks = 0) => {
   const rangeEnd = ymd(days[13]);
   const todayStr = ymd(new Date());
   const monthLabel = String(days[7].getMonth() + 1) + '월';
+  const budgetMonth = String(new Date().getMonth() + 1) + '월';
   const errors = [];
 
   const results = await Promise.all([
@@ -111,7 +112,7 @@ ipcMain.handle('dashboard:load', async (_event, token, offsetWeeks = 0) => {
     }), { results: [] }),
     safeLoad(errors, '가계부', () => notion(token, 'databases/' + BLEEDING_DB + '/query', 'POST', {
       page_size: 100,
-      filter: { property: '월', select: { equals: monthLabel } },
+      filter: { property: '월', select: { equals: budgetMonth } },
     }), { results: [] }),
     safeLoad(errors, '위시리스트', () => notion(token, 'databases/' + WISHLIST_DB + '/query', 'POST', {
       page_size: 50,
@@ -188,7 +189,7 @@ ipcMain.handle('dashboard:load', async (_event, token, offsetWeeks = 0) => {
     ? settings.brainDraft
     : remoteBrainDump;
 
-  if (!settings.brainDraftDirty && settings.brainDraft !== remoteBrainDump) {
+  if (!errors.some((error) => error.startsWith('브레인덤프:')) && !settings.brainDraftDirty && settings.brainDraft !== remoteBrainDump) {
     mergeSettings({ brainDraft: remoteBrainDump });
   }
 
@@ -212,7 +213,7 @@ ipcMain.handle('dashboard:load', async (_event, token, offsetWeeks = 0) => {
     calendarDays,
     todayEvents: await loadTodayEvents(),
     events,
-    bleeding: { sum: bleedingSum, monthLabel, items: bleedingItems },
+    bleeding: { sum: bleedingSum, monthLabel: budgetMonth, items: bleedingItems },
     wishlist: {
       active: wishlist.filter((item) => item.status !== '완료').length,
       total: wishlist.length,
@@ -285,16 +286,25 @@ ipcMain.handle('routine:toggle', async (_event, token, id, done) => {
 });
 
 ipcMain.handle('braindump:save', async (_event, token, text) => {
-  const value = String(text || '').slice(0, 1900);
+  const value = String(text || '');
+  if (value.length > 100000) throw new Error('브레인덤프는 100,000자까지 저장할 수 있어요. 초안은 이 PC에 보관돼요.');
+  const chunks = [];
+  for (let offset = 0; offset < value.length;) {
+    let end = Math.min(offset + 1900, value.length);
+    if (end < value.length && /[\uD800-\uDBFF]/.test(value[end - 1])) end--;
+    chunks.push({ text: { content: value.slice(offset, end) } });
+    offset = end;
+  }
   await notion(token, 'pages/' + BRAINDUMP_PAGE, 'PATCH', {
-    properties: { 내용: { rich_text: value ? [{ text: { content: value } }] : [] } },
+    properties: { 내용: { rich_text: chunks } },
   });
-  mergeSettings({ brainDraft: value, brainDraftDirty: false });
+  const latest = loadSettings();
+  if (latest.brainDraft === value) mergeSettings({ brainDraftDirty: false });
   return true;
 });
 
 ipcMain.handle('braindump:draft', (_event, text) => {
-  mergeSettings({ brainDraft: String(text || '').slice(0, 1900), brainDraftDirty: true });
+  mergeSettings({ brainDraft: String(text || ''), brainDraftDirty: true });
   return true;
 });
 

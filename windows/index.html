@@ -503,6 +503,7 @@ button:disabled { cursor:wait; opacity:.55; }
   .productivity-row { gap:22px; }
 }
 </style>
+<link rel="stylesheet" href="dashboard.css">
 </head>
 <body spellcheck="false">
 <section id="settings-screen">
@@ -518,18 +519,13 @@ button:disabled { cursor:wait; opacity:.55; }
 </section>
 
 <main id="dashboard-screen">
-  <div class="ambient-decor" aria-hidden="true">
-    <span class="milk-glass"></span>
-    <span class="ambient-ice one"></span>
-    <span class="ambient-ice two"></span>
-    <span class="ambient-ice three"></span>
-  </div>
+
   <header class="app-header">
-    <div class="brand">life.....is a bitch <span class="brand-ice" aria-hidden="true"></span><span aria-hidden="true">😎</span></div>
+    <div class="brand">life.....is a bitch <span class="object glasses" aria-hidden="true"></span></div>
     <div class="header-actions">
       <span id="sync-status"></span>
-      <button class="notion-button" id="notion-button">NOTION ↗</button>
-      <button class="ghost-button" id="refresh-button" title="새로고침">↻</button>
+      <button class="notion-button" id="notion-button">노션으로 바로가기 ↗</button>
+      <button class="ghost-button" id="refresh-button" title="새로고침">↻ 동기화</button>
       <div class="date-pill" id="date-pill">09 · 14</div>
     </div>
   </header>
@@ -557,12 +553,7 @@ button:disabled { cursor:wait; opacity:.55; }
       <div class="forecast" id="forecast"></div>
     </div>
 
-    <div class="shortcut-grid">
-      <button class="pill" id="bleeding-card"><span><span class="pill-icon">◇</span> <span id="bleeding-label">bleeding ···</span></span><span class="pill-arrow">›</span></button>
-      <button class="pill pink" id="wishlist-card"><span><span class="pill-icon">♡</span> <span id="wishlist-label">wishlist ···</span></span><span class="pill-arrow">›</span></button>
-      <button class="pill" id="grind-button"><span>grind or be ground</span><span class="pill-arrow">↗</span></button>
-      <button class="pill" id="packaging-button"><span>the packaging 🎀</span><span class="pill-arrow">↗</span></button>
-    </div>
+
   </section>
 
   <section class="dashboard-grid">
@@ -603,7 +594,7 @@ button:disabled { cursor:wait; opacity:.55; }
             <h2 class="section-title">메모</h2>
             <button class="mini-action" id="memo-add">＋</button>
           </div>
-          <div id="memo-list"></div>
+          <span class="object memo-ice" aria-hidden="true"></span><div id="memo-list"></div>
         </section>
       </div>
     </div>
@@ -617,6 +608,12 @@ button:disabled { cursor:wait; opacity:.55; }
       <div id="dump-status"></div>
     </aside>
   </section>
+    <div class="shortcut-grid">
+      <button class="pill" id="bleeding-card"><span><span class="pill-icon">◇</span> <span id="bleeding-label">bleeding ···</span></span><span class="pill-arrow">›</span></button>
+      <button class="pill pink" id="wishlist-card"><span><span class="pill-icon">♡</span> <span id="wishlist-label">wishlist ···</span></span><span class="pill-arrow">›</span></button>
+      <button class="pill" id="grind-button"><span>grind or be ground</span><span class="pill-arrow">↗</span></button>
+      <button class="pill" id="packaging-button"><span>the packaging 🎀</span><span class="pill-arrow">↗</span></button>
+    </div>
 </main>
 
 <div class="modal" id="modal">
@@ -649,7 +646,9 @@ let state = {
   refreshing:false,
   brainTimer:null,
   weatherTimer:null,
-  calendarOffset:0
+  calendarOffset:0,
+  brainDirty:false,
+  brainSaving:false
 };
 
 const byId = (id) => document.getElementById(id);
@@ -796,7 +795,7 @@ function renderTasks(items) {
     list.innerHTML = '<div class="empty">오늘 할 일이 없어요 ♡</div>';
     return;
   }
-  items.slice(0,5).forEach((item) => list.appendChild(checkRow(item,'calendar')));
+  items.forEach((item) => list.appendChild(checkRow(item,'calendar')));
 }
 
 function renderRoutine(routine) {
@@ -809,7 +808,7 @@ function renderRoutine(routine) {
     list.innerHTML = '<div class="empty">평일 루틴을 추가해줘</div>';
     return;
   }
-  routine.items.slice(0,5).forEach((item) => list.appendChild(checkRow(item,'routine')));
+  routine.items.forEach((item) => list.appendChild(checkRow(item,'routine')));
 }
 
 function renderMemo(items) {
@@ -819,7 +818,7 @@ function renderMemo(items) {
     list.innerHTML = '<div class="empty">메모가 없어요</div>';
     return;
   }
-  items.slice(0,6).forEach((memo) => {
+  items.forEach((memo) => {
     const element = document.createElement('div');
     element.className = 'memo-item';
     element.innerHTML = '<span class="memo-title">' + escapeHtml(memo.title) + '</span>';
@@ -836,7 +835,7 @@ function renderDashboard(data) {
   byId('bleeding-label').textContent = 'bleeding · ' + data.bleeding.sum + '만';
   byId('wishlist-label').textContent = 'wishlist · ' + data.wishlist.active;
   const dump = byId('brain-dump');
-  if (document.activeElement !== dump) dump.value = data.brainDump || '';
+  if (!state.brainDirty && !state.brainSaving && document.activeElement !== dump) dump.value = data.brainDump || '';
 }
 
 function showError(message) {
@@ -1024,15 +1023,23 @@ function closeEditor() {
 
 async function saveBrainDump() {
   clearTimeout(state.brainTimer);
+  if (state.brainSaving || !state.brainDirty) return;
+  state.brainSaving = true;
   const text = byId('brain-dump').value;
-  await window.hyeona.saveBrainDraft(text);
-  byId('dump-status').textContent = '노션에 저장 중…';
   try {
+    await window.hyeona.saveBrainDraft(text);
+    byId('dump-status').textContent = '노션에 저장 중…';
     await window.hyeona.saveBrainDump(state.token,text);
-    byId('dump-status').textContent = '저장됨 ✓';
-    byId('brain-saved').textContent = '노션에 저장됨';
+    if (byId('brain-dump').value === text) {
+      state.brainDirty = false;
+      byId('dump-status').textContent = '저장됨 ✓';
+      byId('brain-saved').textContent = '노션에 저장됨';
+    }
   } catch (error) {
     byId('dump-status').textContent = '노션 저장 실패 · 이 PC에 초안 보관됨';
+  } finally {
+    state.brainSaving = false;
+    if (byId('brain-dump').value !== text) state.brainTimer = setTimeout(saveBrainDump,300);
   }
 }
 
@@ -1092,7 +1099,9 @@ byId('notion-button').onclick = async () => {
 };
 
 byId('brain-dump').addEventListener('input', async () => {
-  await window.hyeona.saveBrainDraft(byId('brain-dump').value);
+  state.brainDirty = true;
+  try { await window.hyeona.saveBrainDraft(byId('brain-dump').value); }
+  catch (error) { showError('초안 저장 실패: ' + error.message); }
   byId('dump-status').textContent = '입력 내용 보관됨';
   clearTimeout(state.brainTimer);
   state.brainTimer = setTimeout(saveBrainDump,900);
@@ -1116,6 +1125,11 @@ state.weatherTimer = setInterval(initWeather,1200000);
   const settings = await window.hyeona.getSettings();
   if (settings.token) {
     state.token = settings.token;
+    if (settings.brainDraftDirty) {
+      state.brainDirty = true;
+      byId('brain-dump').value = settings.brainDraft || '';
+      byId('dump-status').textContent = '이 PC의 미저장 초안을 복구했어요';
+    }
     showDashboard();
     await Promise.all([refreshDashboard(),initWeather()]);
   } else {

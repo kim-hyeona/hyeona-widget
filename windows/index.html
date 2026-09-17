@@ -614,6 +614,30 @@ button:disabled { cursor:wait; opacity:.55; }
       <button class="pill" id="grind-button"><span>grind or be ground</span><span class="pill-arrow">↗</span></button>
       <button class="pill" id="packaging-button"><span>the packaging 🎀</span><span class="pill-arrow">↗</span></button>
     </div>
+
+    <section class="care-calendar" aria-labelledby="care-calendar-title">
+      <div class="care-calendar-head">
+        <div>
+          <span class="care-kicker">DIET · CARE</span>
+          <h2 id="care-calendar-title">식단 / 관리 캘린더</h2>
+        </div>
+        <div class="care-month-nav">
+          <button id="care-prev" aria-label="이전 달">‹</button>
+          <strong id="care-month-label"></strong>
+          <button id="care-next" aria-label="다음 달">›</button>
+        </div>
+      </div>
+      <form class="cycle-form" id="cycle-form">
+        <label>관리 시작<input type="date" name="periodStart"></label>
+        <label>관리 종료<input type="date" name="periodEnd"></label>
+        <label>평균 주기(일)<input type="number" name="cycleLength" min="21" max="45" value="28"></label>
+        <button class="ghost-button" type="submit">일정 표시</button>
+        <span id="cycle-status"></span>
+      </form>
+      <div class="cycle-legend" aria-label="개인 관리 기호"><span class="period">🫧</span><span class="follicular">💊</span><span class="ovulation">✦</span><span class="luteal">🍦</span></div>
+      <div class="care-grid" id="care-grid"></div>
+      <p class="cycle-note">✦는 평균 주기를 기준으로 계산한 예상일이에요. 복용·사용 일정은 처방과 의료진 안내를 우선해줘.</p>
+    </section>
 </main>
 
 <div class="modal" id="modal">
@@ -643,12 +667,15 @@ let state = {
   data:null,
   token:'',
   activeType:null,
+  activeItemId:null,
   refreshing:false,
   brainTimer:null,
   weatherTimer:null,
   calendarOffset:0,
   brainDirty:false,
-  brainSaving:false
+  brainSaving:false,
+  careMonthOffset:0,
+  cyclePlan:{}
 };
 
 const byId = (id) => document.getElementById(id);
@@ -672,6 +699,62 @@ function localDateString(date) {
     String(date.getMonth() + 1).padStart(2,'0'),
     String(date.getDate()).padStart(2,'0')
   ].join('-');
+}
+
+function parseLocalDate(value) {
+  if (!value) return null;
+  const parts = value.split('-').map(Number);
+  if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) return null;
+  return new Date(parts[0],parts[1] - 1,parts[2],12,0,0,0);
+}
+
+function cyclePhase(date, plan) {
+  const anchor = parseLocalDate(plan.periodStart);
+  const firstEnd = parseLocalDate(plan.periodEnd);
+  const cycleLength = Number(plan.cycleLength || 28);
+  if (!anchor || !firstEnd || cycleLength < 21 || cycleLength > 45) return null;
+  const dayMs = 86400000;
+  const periodDays = Math.max(1,Math.round((firstEnd - anchor) / dayMs) + 1);
+  const cycleIndex = Math.floor((date - anchor) / dayMs / cycleLength);
+  const cycleStart = new Date(anchor);
+  cycleStart.setDate(anchor.getDate() + cycleIndex * cycleLength);
+  const dayInCycle = Math.round((date - cycleStart) / dayMs);
+  const ovulationDay = cycleLength - 14;
+  if (dayInCycle >= 0 && dayInCycle < periodDays) return { key:'period', icon:'🫧', label:'개인 관리 1' };
+  if (dayInCycle >= periodDays && dayInCycle < ovulationDay) return { key:'follicular', icon:'💊', label:'개인 관리 2' };
+  if (dayInCycle === ovulationDay) return { key:'ovulation', icon:'✦', label:'예상 전환일' };
+  if (dayInCycle > ovulationDay && dayInCycle < cycleLength) return { key:'luteal', icon:'🍦', label:'개인 관리 3' };
+  return null;
+}
+
+function renderCareCalendar() {
+  const now = new Date();
+  const view = new Date(now.getFullYear(),now.getMonth() + state.careMonthOffset,1,12);
+  const year = view.getFullYear();
+  const month = view.getMonth();
+  const firstDay = new Date(year,month,1,12).getDay();
+  const daysInMonth = new Date(year,month + 1,0,12).getDate();
+  byId('care-month-label').textContent = year + ' · ' + String(month + 1).padStart(2,'0');
+  let html = DOW.map((name) => '<div class="care-dow">' + name + '</div>').join('');
+  for (let index = 0; index < firstDay; index += 1) html += '<div class="care-day muted"></div>';
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const date = new Date(year,month,day,12);
+    const phase = cyclePhase(date,state.cyclePlan);
+    const isToday = localDateString(date) === localDateString(now);
+    html += '<div class="care-day' + (phase ? ' ' + phase.key : '') + (isToday ? ' today' : '') + '">' +
+      '<span class="care-date">' + day + '</span>' +
+      (phase ? '<span class="care-plan" aria-label="' + escapeHtml(phase.label) + '">' + phase.icon + '</span>' : '') +
+      '</div>';
+  }
+  byId('care-grid').innerHTML = html;
+}
+
+function fillCycleForm() {
+  const form = byId('cycle-form');
+  ['periodStart','periodEnd','cycleLength'].forEach((name) => {
+    form.elements[name].value = state.cyclePlan[name] || '';
+  });
+  if (!form.elements.cycleLength.value) form.elements.cycleLength.value = '28';
 }
 
 function tickClock() {
@@ -760,8 +843,26 @@ function renderCalendar(data) {
   });
   byId('cal-grid').innerHTML = html;
   byId('cal-grid').querySelectorAll('[data-event-id]').forEach((element) => {
-    element.addEventListener('click', () => openEditor('calendar'));
+    element.addEventListener('click', () => {
+      const item = (data.events || []).find((event) => event.id === element.dataset.eventId);
+      if (item) openItemDetail('calendar',item);
+    });
   });
+}
+
+async function toggleCheckedItem(row, item, type) {
+  if (row.dataset.busy) return;
+  row.dataset.busy = '1';
+  row.style.opacity = '.55';
+  try {
+    await window.hyeona.updateItem(state.token,type,item.id,{ done:!item.done });
+    await refreshDashboard();
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    delete row.dataset.busy;
+    row.style.opacity = '';
+  }
 }
 
 function checkRow(item, type) {
@@ -770,19 +871,13 @@ function checkRow(item, type) {
   row.innerHTML =
     '<span class="box">' + (item.done ? '✓' : '') + '</span>' +
     '<span class="row-text">' + escapeHtml(item.title) + '</span>';
-  row.addEventListener('click', async () => {
-    if (row.dataset.busy) return;
-    row.dataset.busy = '1';
-    row.style.opacity = '.55';
-    try {
-      await window.hyeona.updateItem(state.token, type, item.id, { done:!item.done });
-      await refreshDashboard();
-    } catch (error) {
-      showError(error.message);
-    } finally {
-      delete row.dataset.busy;
-      row.style.opacity = '';
-    }
+  row.querySelector('.box').addEventListener('click',(event) => {
+    event.stopPropagation();
+    toggleCheckedItem(row,item,type);
+  });
+  row.querySelector('.row-text').addEventListener('click',() => {
+    if (type === 'calendar') openItemDetail(type,item);
+    else toggleCheckedItem(row,item,type);
   });
   return row;
 }
@@ -822,7 +917,7 @@ function renderMemo(items) {
     const element = document.createElement('div');
     element.className = 'memo-item';
     element.innerHTML = '<span class="memo-title">' + escapeHtml(memo.title) + '</span>';
-    element.addEventListener('click', () => openEditor('memo'));
+    element.addEventListener('click', () => openItemDetail('memo',memo));
     list.appendChild(element);
   });
 }
@@ -955,6 +1050,14 @@ async function modalAction(action, success) {
 function renderEditor() {
   const type = state.activeType;
   const meta = TYPE_META[type];
+  if (state.activeItemId) {
+    const item = itemsFor(type).find((candidate) => candidate.id === state.activeItemId);
+    if (item) {
+      renderItemDetail(type,item);
+      return;
+    }
+    state.activeItemId = null;
+  }
   byId('modal-title').textContent = meta.title;
   const form = byId('editor-form');
   form.innerHTML = formFields(type) + '<button class="primary-button">' + meta.add + '</button>';
@@ -1007,16 +1110,74 @@ function renderEditor() {
   });
 }
 
+function renderItemDetail(type,item) {
+  const meta = TYPE_META[type];
+  byId('modal-title').textContent = meta.title + ' · 상세';
+  const form = byId('editor-form');
+  form.innerHTML = '';
+  const list = byId('editor-list');
+  list.innerHTML = '<form class="detail-form">' +
+    '<label>제목<input class="field" name="title" required value="' + escapeHtml(item.title) + '"></label>' +
+    (type === 'calendar' ? '<label>날짜<input class="field" name="date" type="date" value="' + escapeHtml(item.date || '') + '"></label>' : '') +
+    '<div class="detail-actions">' +
+      '<button type="button" class="ghost-button detail-back">← 전체 목록</button>' +
+      (type === 'calendar' ? '<button type="button" class="ghost-button detail-done">' + (item.done ? '완료 취소' : '완료 표시') + '</button>' : '') +
+      '<button type="submit" class="primary-button">저장</button>' +
+      '<button type="button" class="small-button danger detail-delete">삭제</button>' +
+    '</div>' +
+  '</form>';
+  const detailForm = list.querySelector('.detail-form');
+  detailForm.onsubmit = (event) => {
+    event.preventDefault();
+    const data = new FormData(detailForm);
+    const payload = { title:data.get('title') || '' };
+    if (type === 'calendar') payload.date = data.get('date') || '';
+    modalAction(() => window.hyeona.updateItem(state.token,type,item.id,payload),'저장했어요');
+  };
+  list.querySelector('.detail-back').onclick = () => {
+    state.activeItemId = null;
+    renderEditor();
+  };
+  const done = list.querySelector('.detail-done');
+  if (done) done.onclick = () => modalAction(
+    () => window.hyeona.updateItem(state.token,type,item.id,{ done:!item.done }),
+    '완료 상태를 바꿨어요'
+  );
+  list.querySelector('.detail-delete').onclick = async () => {
+    byId('modal-status').textContent = '노션에서 삭제 중…';
+    try {
+      await window.hyeona.deleteItem(state.token,item.id);
+      state.activeItemId = null;
+      await refreshDashboard();
+      renderEditor();
+      byId('modal-status').textContent = '삭제했어요';
+    } catch (error) {
+      byId('modal-status').textContent = '삭제 실패: ' + error.message;
+    }
+  };
+}
+
 function openEditor(type) {
   state.activeType = type;
+  state.activeItemId = null;
   byId('modal').style.display = 'flex';
   renderEditor();
   const input = byId('editor-form').querySelector('input');
   if (input) input.focus();
 }
 
+function openItemDetail(type,item) {
+  state.activeType = type;
+  state.activeItemId = item.id;
+  byId('modal').style.display = 'flex';
+  renderEditor();
+  const input = byId('editor-list').querySelector('input');
+  if (input) input.focus();
+}
+
 function closeEditor() {
   state.activeType = null;
+  state.activeItemId = null;
   byId('modal').style.display = 'none';
   byId('modal-status').textContent = '';
 }
@@ -1086,6 +1247,33 @@ byId('routine-add').onclick = () => openEditor('routine');
 byId('memo-add').onclick = () => openEditor('memo');
 byId('grind-button').onclick = () => state.data && window.hyeona.openLink(state.data.links.grind);
 byId('packaging-button').onclick = () => state.data && window.hyeona.openLink(state.data.links.packaging);
+byId('care-prev').onclick = () => {
+  state.careMonthOffset -= 1;
+  renderCareCalendar();
+};
+byId('care-next').onclick = () => {
+  state.careMonthOffset += 1;
+  renderCareCalendar();
+};
+byId('cycle-form').onsubmit = async (event) => {
+  event.preventDefault();
+  const formData = new FormData(event.currentTarget);
+  const plan = {
+    periodStart:formData.get('periodStart') || '',
+    periodEnd:formData.get('periodEnd') || '',
+    cycleLength:Number(formData.get('cycleLength') || 28)
+  };
+  const dates = [parseLocalDate(plan.periodStart),parseLocalDate(plan.periodEnd)];
+  if (dates.some((date) => !date) || dates[0] > dates[1] || plan.cycleLength < 21 || plan.cycleLength > 45) {
+    byId('cycle-status').textContent = '날짜 순서를 확인해줘';
+    return;
+  }
+  state.cyclePlan = plan;
+  await window.hyeona.setSettings({ cyclePlan:plan });
+  state.careMonthOffset = (dates[0].getFullYear() - new Date().getFullYear()) * 12 + dates[0].getMonth() - new Date().getMonth();
+  renderCareCalendar();
+  byId('cycle-status').textContent = '이 PC에 저장됨 ✓';
+};
 
 byId('notion-button').onclick = async () => {
   byId('notion-button').disabled = true;
@@ -1123,6 +1311,9 @@ state.weatherTimer = setInterval(initWeather,1200000);
 
 (async () => {
   const settings = await window.hyeona.getSettings();
+  state.cyclePlan = settings.cyclePlan || {};
+  fillCycleForm();
+  renderCareCalendar();
   if (settings.token) {
     state.token = settings.token;
     if (settings.brainDraftDirty) {

@@ -2,9 +2,9 @@
 body { min-width:760px; background:#fefcfb; }
 #dashboard-screen { padding:24px clamp(24px,4vw,64px) 64px; overflow:visible; }
 .app-header { min-height:68px; gap:20px; }
-.brand { font:400 18px Georgia,Batang,serif; gap:6px; }
+.brand { font:400 13px Georgia,Batang,serif; gap:5px; }
 .object { display:inline-block; width:52px; height:52px; flex:0 0 52px; background:url('assets/objects.webp') no-repeat; background-size:400% 200%; }
-.object.glasses { width:48px; height:48px; flex-basis:48px; background-position:66.6666667% 100%; }
+.object.glasses { width:30px; height:30px; flex-basis:30px; background-position:66.6666667% 100%; }
 .header-actions { flex-wrap:wrap; justify-content:flex-end; }
 .notion-button,.ghost-button,.primary-button { background:#edf6f8; color:#56717e; border:1px solid #d5e7ec; border-radius:16px; padding:9px 13px; }
 .date-pill { background:#faf2f4; color:#806e74; min-width:70px; }
@@ -25,7 +25,7 @@ body { min-width:760px; background:#fefcfb; }
 .section-title,.calendar-title { display:flex; align-items:center; gap:10px; }
 .section-title::before,.calendar-title::before { content:''; display:block; width:52px; height:52px; flex:0 0 52px; background:url('assets/objects.webp') no-repeat; background-size:400% 200%; }
 .calendar-title::before { background-position:0 0; }
-.product-card:nth-child(1) .section-title::before { background-position:33.3333333% 0; }
+.product-card:nth-child(1) .section-title::before { background-image:url('assets/iced-americano.png'); background-size:contain; background-position:center; }
 .product-card:nth-child(2) .section-title::before { background-position:66.6666667% 0; }
 .product-card:nth-child(3) .section-title::before { background-position:100% 0; }
 .brain-section .section-title::before { background-position:33.3333333% 100%; }
@@ -46,6 +46,7 @@ body { min-width:760px; background:#fefcfb; }
 .memo-ice { position:absolute; right:25px; top:16px; width:42px; height:42px; flex-basis:42px; background-position:0 100%; pointer-events:none; }
 .product-card:nth-child(3) .section-head { padding-right:0; }
 .check-row { min-height:44px; }
+.check-row .box,.check-row .row-text { cursor:pointer; }
 .row-text { white-space:normal; overflow-wrap:anywhere; }
 #memo-list { max-height:none; overflow:visible; grid-auto-rows:minmax(88px,auto); }
 .memo-item { background:#fffdfa; padding:14px; border-radius:12px; }
@@ -59,9 +60,47 @@ body { min-width:760px; background:#fefcfb; }
 .pill.pink { background:#faedf1; border-color:#f1dce4; color:#8b6673; }
 #grind-button,#packaging-button { background:#fffdfa; border-color:#ebe5e1; color:#69625d; }
 .pill:hover { filter:none; border-color:#a9c9d4; }
+.care-calendar { margin-top:54px; padding-top:28px; border-top:1px solid #e2dcd8; color:#524b47; }
+.care-calendar-head { display:flex; align-items:end; justify-content:space-between; gap:24px; margin-bottom:20px; }
+.care-kicker { display:block; margin-bottom:5px; color:#91a7ae; font-size:10px; letter-spacing:.16em; }
+.care-calendar h2 { margin:0; font:400 20px Georgia,Batang,serif; }
+.care-month-nav { display:flex; align-items:center; gap:14px; color:#786f69; font-size:13px; }
+.care-month-nav button { width:30px; height:30px; border:1px solid #e6dfdb; border-radius:50%; background:#fffdfa; color:#887e78; }
+.cycle-form { display:grid; grid-template-columns:repeat(3,minmax(140px,1fr)) auto minmax(80px,auto); gap:12px; align-items:end; margin-bottom:18px; }
+.cycle-form label { display:grid; gap:7px; color:#9a8d87; font-size:10px; letter-spacing:.04em; }
+.cycle-form input { min-width:0; height:38px; padding:0 11px; border:1px solid #e7dfdb; border-radius:12px; background:#fffdfa; color:#5f5854; }
+#cycle-status { align-self:center; color:#8ca0a5; font-size:11px; }
+.cycle-legend { display:flex; flex-wrap:wrap; gap:10px 22px; margin-bottom:13px; color:#817872; font-size:11px; }
+.cycle-legend span::before { content:''; display:inline-block; width:8px; height:8px; margin-right:7px; border-radius:50%; }
+.cycle-legend .period::before { background:#f1cfd9; }
+.cycle-legend .follicular::before { background:#dceef2; }
+.cycle-legend .ovulation::before { background:#cadce2; }
+.cycle-legend .luteal::before { background:#e8e0f0; }
+.care-grid { display:grid; grid-template-columns:repeat(7,minmax(105px,1fr)); border-top:1px solid #e7e1dd; border-left:1px solid #e7e1dd; }
+.care-dow { padding:10px; border-right:1px solid #e7e1dd; border-bottom:1px solid #e7e1dd; color:#ab9d96; text-align:center; font-size:10px; }
+.care-dow:first-child { color:#c997a2; }
+.care-dow:nth-child(7) { color:#8daeba; }
+.care-day { min-height:88px; padding:10px; border-right:1px solid #e7e1dd; border-bottom:1px solid #e7e1dd; background:#fffefd; }
+.care-day.muted { background:#fcfaf8; }
+.care-day.today .care-date { display:grid; place-items:center; width:23px; height:23px; border-radius:50%; background:#e2eff2; }
+.care-day.period { background:#fdf3f6; }
+.care-day.follicular { background:#f1f8f9; }
+.care-day.ovulation { background:#eef6f8; }
+.care-day.luteal { background:#f7f3f9; }
+.care-date { color:#786e68; font-size:11px; }
+.care-plan { display:block; margin-top:12px; padding:6px 7px; overflow:hidden; border-radius:7px; color:#61777e; font-size:10px; line-height:1.25; text-overflow:ellipsis; white-space:nowrap; }
+.period .care-plan { background:#f6dfe6; color:#8d6671; }
+.follicular .care-plan { background:#deeff2; }
+.ovulation .care-plan { background:#d9e9ed; color:#54717b; text-align:center; }
+.luteal .care-plan { background:#eae1f0; color:#796b82; }
+.cycle-note { margin:12px 0 0; color:#aaa09a; font-size:10px; }
 .editor-form,.edit-row { gap:10px; }
 button:focus-visible,[role=button]:focus-visible { outline:2px solid #96bac8; outline-offset:3px; }
 .modal-box { width:min(900px,94vw); }
+.detail-form { display:grid; gap:18px; padding:8px 0 4px; }
+.detail-form label { display:grid; gap:8px; color:#9a8d87; font-size:11px; }
+.detail-form .field { width:100%; min-height:44px; font-size:14px; }
+.detail-actions { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:10px; padding-top:8px; }
 @media(max-width:1100px) {
   .utility-row { grid-template-columns:auto 1fr; gap:24px; }
   .dashboard-grid { grid-template-columns:minmax(0,3fr) minmax(220px,1fr); gap:24px; }
@@ -70,4 +109,6 @@ button:focus-visible,[role=button]:focus-visible { outline:2px solid #96bac8; ou
   .product-card .section-title::before { width:34px; height:34px; flex-basis:34px; }
   .memo-ice { top:10px; width:34px; height:34px; }
   .forecast { gap:12px; }
+  .cycle-form { grid-template-columns:repeat(2,minmax(150px,1fr)) auto; }
+  .care-grid { grid-template-columns:repeat(7,minmax(92px,1fr)); overflow-x:auto; }
 }

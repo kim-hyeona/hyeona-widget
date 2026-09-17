@@ -54,6 +54,37 @@ function plainText(prop) {
   return (prop && prop.rich_text || []).map((x) => x.plain_text).join('') || '';
 }
 
+function richTextValue(items) {
+  return (items || []).map((item) => item.plain_text || '').join('');
+}
+
+async function loadBlockChildren(token, blockId, depth = 0) {
+  const blocks = [];
+  let cursor;
+  do {
+    const query = cursor ? '?page_size=100&start_cursor=' + encodeURIComponent(cursor) : '?page_size=100';
+    const data = await notion(token, 'blocks/' + blockId + '/children' + query);
+    for (const block of data.results || []) {
+      const value = block[block.type] || {};
+      const normalized = {
+        id: block.id,
+        type: block.type,
+        text: richTextValue(value.rich_text),
+        checked: !!value.checked,
+        language: value.language || '',
+        url: value.external && value.external.url || value.file && value.file.url || '',
+        children: [],
+      };
+      if (block.has_children && depth < 2) {
+        normalized.children = await loadBlockChildren(token, block.id, depth + 1);
+      }
+      blocks.push(normalized);
+    }
+    cursor = data.has_more ? data.next_cursor : null;
+  } while (cursor);
+  return blocks;
+}
+
 function pageTitle(page) {
   const props = page && page.properties || {};
   for (const value of Object.values(props)) {
@@ -366,6 +397,16 @@ ipcMain.handle('item:update', async (_event, token, type, id, payload) => {
 
 ipcMain.handle('item:delete', async (_event, token, id) => {
   return notion(token, 'pages/' + id, 'PATCH', { archived: true });
+});
+
+ipcMain.handle('page:detail', async (_event, token, id) => {
+  const page = await notion(token, 'pages/' + id);
+  return {
+    id: page.id,
+    title: pageTitle(page) || '상세 내용',
+    url: page.url || '',
+    blocks: await loadBlockChildren(token, id),
+  };
 });
 
 ipcMain.handle('link:open', async (_event, url) => shell.openExternal(url));

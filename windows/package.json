@@ -1,6 +1,6 @@
 {
   "name": "hyeona-widget",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "현아 위젯 Windows 데스크톱 패널",
   "main": "main.js",
   "author": "kim-hyeona",

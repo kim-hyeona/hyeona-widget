@@ -622,9 +622,9 @@ button:disabled { cursor:wait; opacity:.55; }
           <h2 id="care-calendar-title">식단 / 관리 캘린더</h2>
         </div>
         <div class="care-month-nav">
-          <button id="care-prev" aria-label="이전 달">‹</button>
+          <button id="care-prev" aria-label="이전 주">‹</button>
           <strong id="care-month-label"></strong>
-          <button id="care-next" aria-label="다음 달">›</button>
+          <button id="care-next" aria-label="다음 주">›</button>
         </div>
       </div>
       <form class="cycle-form" id="cycle-form">
@@ -652,6 +652,22 @@ button:disabled { cursor:wait; opacity:.55; }
   </div>
 </div>
 
+<aside class="side-peek" id="side-peek" aria-hidden="true">
+  <div class="side-peek-head">
+    <div>
+      <span class="care-kicker">NOTION · SIDE PEEK</span>
+      <h2 id="side-peek-title">상세 내용</h2>
+    </div>
+    <div class="side-peek-actions">
+      <button class="ghost-button" id="side-peek-notion">노션에서 열기 ↗</button>
+      <button class="close-button" id="side-peek-close" aria-label="닫기">×</button>
+    </div>
+  </div>
+  <div class="side-peek-meta" id="side-peek-meta"></div>
+  <div class="side-peek-body" id="side-peek-body"></div>
+</aside>
+<div class="side-peek-backdrop" id="side-peek-backdrop"></div>
+
 <script>
 const DOW = ['일','월','화','수','목','금','토'];
 const DAY_EN = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
@@ -667,14 +683,13 @@ let state = {
   data:null,
   token:'',
   activeType:null,
-  activeItemId:null,
   refreshing:false,
   brainTimer:null,
   weatherTimer:null,
   calendarOffset:0,
   brainDirty:false,
   brainSaving:false,
-  careMonthOffset:0,
+  careWeekOffset:0,
   cyclePlan:{}
 };
 
@@ -729,24 +744,73 @@ function cyclePhase(date, plan) {
 
 function renderCareCalendar() {
   const now = new Date();
-  const view = new Date(now.getFullYear(),now.getMonth() + state.careMonthOffset,1,12);
-  const year = view.getFullYear();
-  const month = view.getMonth();
-  const firstDay = new Date(year,month,1,12).getDay();
-  const daysInMonth = new Date(year,month + 1,0,12).getDate();
-  byId('care-month-label').textContent = year + ' · ' + String(month + 1).padStart(2,'0');
+  const start = new Date(now.getFullYear(),now.getMonth(),now.getDate(),12);
+  start.setDate(start.getDate() - start.getDay() + state.careWeekOffset * 7);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  byId('care-month-label').textContent =
+    String(start.getMonth() + 1).padStart(2,'0') + '.' + String(start.getDate()).padStart(2,'0') +
+    ' — ' + String(end.getMonth() + 1).padStart(2,'0') + '.' + String(end.getDate()).padStart(2,'0');
   let html = DOW.map((name) => '<div class="care-dow">' + name + '</div>').join('');
-  for (let index = 0; index < firstDay; index += 1) html += '<div class="care-day muted"></div>';
-  for (let day = 1; day <= daysInMonth; day += 1) {
-    const date = new Date(year,month,day,12);
+  for (let index = 0; index < 7; index += 1) {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
     const phase = cyclePhase(date,state.cyclePlan);
     const isToday = localDateString(date) === localDateString(now);
     html += '<div class="care-day' + (phase ? ' ' + phase.key : '') + (isToday ? ' today' : '') + '">' +
-      '<span class="care-date">' + day + '</span>' +
+      '<span class="care-date">' + (date.getMonth() + 1) + '/' + date.getDate() + '</span>' +
       (phase ? '<span class="care-plan" aria-label="' + escapeHtml(phase.label) + '">' + phase.icon + '</span>' : '') +
       '</div>';
   }
   byId('care-grid').innerHTML = html;
+}
+
+function renderNotionBlocks(blocks, depth = 0) {
+  if (!blocks || !blocks.length) return depth ? '' : '<div class="side-peek-empty">작성된 상세 내용이 없어요.</div>';
+  return blocks.map((block) => {
+    const text = escapeHtml(block.text || '');
+    let content = '';
+    if (block.type === 'heading_1') content = '<h1>' + text + '</h1>';
+    else if (block.type === 'heading_2') content = '<h2>' + text + '</h2>';
+    else if (block.type === 'heading_3') content = '<h3>' + text + '</h3>';
+    else if (block.type === 'bulleted_list_item') content = '<div class="peek-list">• ' + text + '</div>';
+    else if (block.type === 'numbered_list_item') content = '<div class="peek-list">' + (depth + 1) + '. ' + text + '</div>';
+    else if (block.type === 'to_do') content = '<div class="peek-todo"><span>' + (block.checked ? '✓' : '□') + '</span><span>' + text + '</span></div>';
+    else if (block.type === 'quote') content = '<blockquote>' + text + '</blockquote>';
+    else if (block.type === 'callout') content = '<div class="peek-callout">' + text + '</div>';
+    else if (block.type === 'code') content = '<pre><code>' + text + '</code></pre>';
+    else if (block.type === 'divider') content = '<hr>';
+    else if (block.type === 'image' && block.url) content = '<img src="' + escapeHtml(block.url) + '" alt="">';
+    else if (text) content = '<p>' + text + '</p>';
+    const children = renderNotionBlocks(block.children || [],depth + 1);
+    return '<div class="peek-block depth-' + Math.min(depth,2) + '">' + content + children + '</div>';
+  }).join('');
+}
+
+async function openSidePeek(type,item) {
+  const peek = byId('side-peek');
+  state.sidePeekUrl = '';
+  byId('side-peek-title').textContent = item.title || '상세 내용';
+  byId('side-peek-meta').textContent = type === 'calendar' && item.date ? item.date : (type === 'memo' ? 'MEMO' : '');
+  byId('side-peek-body').innerHTML = '<div class="side-peek-empty">노션에서 불러오는 중…</div>';
+  peek.classList.add('open');
+  peek.setAttribute('aria-hidden','false');
+  byId('side-peek-backdrop').classList.add('open');
+  try {
+    const detail = await window.hyeona.loadPageDetail(state.token,item.id);
+    if (!peek.classList.contains('open')) return;
+    state.sidePeekUrl = detail.url || '';
+    byId('side-peek-title').textContent = detail.title || item.title || '상세 내용';
+    byId('side-peek-body').innerHTML = renderNotionBlocks(detail.blocks || []);
+  } catch (error) {
+    byId('side-peek-body').innerHTML = '<div class="side-peek-empty">상세 내용을 불러오지 못했어요.<br>' + escapeHtml(error.message) + '</div>';
+  }
+}
+
+function closeSidePeek() {
+  byId('side-peek').classList.remove('open');
+  byId('side-peek').setAttribute('aria-hidden','true');
+  byId('side-peek-backdrop').classList.remove('open');
 }
 
 function fillCycleForm() {
@@ -845,7 +909,7 @@ function renderCalendar(data) {
   byId('cal-grid').querySelectorAll('[data-event-id]').forEach((element) => {
     element.addEventListener('click', () => {
       const item = (data.events || []).find((event) => event.id === element.dataset.eventId);
-      if (item) openItemDetail('calendar',item);
+      if (item) openSidePeek('calendar',item);
     });
   });
 }
@@ -876,7 +940,7 @@ function checkRow(item, type) {
     toggleCheckedItem(row,item,type);
   });
   row.querySelector('.row-text').addEventListener('click',() => {
-    if (type === 'calendar') openItemDetail(type,item);
+    if (type === 'calendar') openSidePeek(type,item);
     else toggleCheckedItem(row,item,type);
   });
   return row;
@@ -917,7 +981,7 @@ function renderMemo(items) {
     const element = document.createElement('div');
     element.className = 'memo-item';
     element.innerHTML = '<span class="memo-title">' + escapeHtml(memo.title) + '</span>';
-    element.addEventListener('click', () => openItemDetail('memo',memo));
+    element.addEventListener('click', () => openSidePeek('memo',memo));
     list.appendChild(element);
   });
 }
@@ -1050,14 +1114,6 @@ async function modalAction(action, success) {
 function renderEditor() {
   const type = state.activeType;
   const meta = TYPE_META[type];
-  if (state.activeItemId) {
-    const item = itemsFor(type).find((candidate) => candidate.id === state.activeItemId);
-    if (item) {
-      renderItemDetail(type,item);
-      return;
-    }
-    state.activeItemId = null;
-  }
   byId('modal-title').textContent = meta.title;
   const form = byId('editor-form');
   form.innerHTML = formFields(type) + '<button class="primary-button">' + meta.add + '</button>';
@@ -1110,74 +1166,16 @@ function renderEditor() {
   });
 }
 
-function renderItemDetail(type,item) {
-  const meta = TYPE_META[type];
-  byId('modal-title').textContent = meta.title + ' · 상세';
-  const form = byId('editor-form');
-  form.innerHTML = '';
-  const list = byId('editor-list');
-  list.innerHTML = '<form class="detail-form">' +
-    '<label>제목<input class="field" name="title" required value="' + escapeHtml(item.title) + '"></label>' +
-    (type === 'calendar' ? '<label>날짜<input class="field" name="date" type="date" value="' + escapeHtml(item.date || '') + '"></label>' : '') +
-    '<div class="detail-actions">' +
-      '<button type="button" class="ghost-button detail-back">← 전체 목록</button>' +
-      (type === 'calendar' ? '<button type="button" class="ghost-button detail-done">' + (item.done ? '완료 취소' : '완료 표시') + '</button>' : '') +
-      '<button type="submit" class="primary-button">저장</button>' +
-      '<button type="button" class="small-button danger detail-delete">삭제</button>' +
-    '</div>' +
-  '</form>';
-  const detailForm = list.querySelector('.detail-form');
-  detailForm.onsubmit = (event) => {
-    event.preventDefault();
-    const data = new FormData(detailForm);
-    const payload = { title:data.get('title') || '' };
-    if (type === 'calendar') payload.date = data.get('date') || '';
-    modalAction(() => window.hyeona.updateItem(state.token,type,item.id,payload),'저장했어요');
-  };
-  list.querySelector('.detail-back').onclick = () => {
-    state.activeItemId = null;
-    renderEditor();
-  };
-  const done = list.querySelector('.detail-done');
-  if (done) done.onclick = () => modalAction(
-    () => window.hyeona.updateItem(state.token,type,item.id,{ done:!item.done }),
-    '완료 상태를 바꿨어요'
-  );
-  list.querySelector('.detail-delete').onclick = async () => {
-    byId('modal-status').textContent = '노션에서 삭제 중…';
-    try {
-      await window.hyeona.deleteItem(state.token,item.id);
-      state.activeItemId = null;
-      await refreshDashboard();
-      renderEditor();
-      byId('modal-status').textContent = '삭제했어요';
-    } catch (error) {
-      byId('modal-status').textContent = '삭제 실패: ' + error.message;
-    }
-  };
-}
-
 function openEditor(type) {
   state.activeType = type;
-  state.activeItemId = null;
   byId('modal').style.display = 'flex';
   renderEditor();
   const input = byId('editor-form').querySelector('input');
   if (input) input.focus();
 }
 
-function openItemDetail(type,item) {
-  state.activeType = type;
-  state.activeItemId = item.id;
-  byId('modal').style.display = 'flex';
-  renderEditor();
-  const input = byId('editor-list').querySelector('input');
-  if (input) input.focus();
-}
-
 function closeEditor() {
   state.activeType = null;
-  state.activeItemId = null;
   byId('modal').style.display = 'none';
   byId('modal-status').textContent = '';
 }
@@ -1248,11 +1246,11 @@ byId('memo-add').onclick = () => openEditor('memo');
 byId('grind-button').onclick = () => state.data && window.hyeona.openLink(state.data.links.grind);
 byId('packaging-button').onclick = () => state.data && window.hyeona.openLink(state.data.links.packaging);
 byId('care-prev').onclick = () => {
-  state.careMonthOffset -= 1;
+  state.careWeekOffset -= 1;
   renderCareCalendar();
 };
 byId('care-next').onclick = () => {
-  state.careMonthOffset += 1;
+  state.careWeekOffset += 1;
   renderCareCalendar();
 };
 byId('cycle-form').onsubmit = async (event) => {
@@ -1270,7 +1268,12 @@ byId('cycle-form').onsubmit = async (event) => {
   }
   state.cyclePlan = plan;
   await window.hyeona.setSettings({ cyclePlan:plan });
-  state.careMonthOffset = (dates[0].getFullYear() - new Date().getFullYear()) * 12 + dates[0].getMonth() - new Date().getMonth();
+  const today = new Date();
+  const currentWeek = new Date(today.getFullYear(),today.getMonth(),today.getDate(),12);
+  currentWeek.setDate(currentWeek.getDate() - currentWeek.getDay());
+  const targetWeek = new Date(dates[0]);
+  targetWeek.setDate(targetWeek.getDate() - targetWeek.getDay());
+  state.careWeekOffset = Math.round((targetWeek - currentWeek) / 604800000);
   renderCareCalendar();
   byId('cycle-status').textContent = '이 PC에 저장됨 ✓';
 };
@@ -1299,9 +1302,16 @@ byId('brain-dump').addEventListener('blur',saveBrainDump);
 byId('modal-close').onclick = closeEditor;
 byId('modal').onclick = (event) => { if (event.target === byId('modal')) closeEditor(); };
 window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && byId('side-peek').classList.contains('open')) {
+    closeSidePeek();
+    return;
+  }
   if (event.key === 'Escape') closeEditor();
   if (event.ctrlKey && event.key === 'Enter' && document.activeElement === byId('brain-dump')) saveBrainDump();
 });
+byId('side-peek-close').onclick = closeSidePeek;
+byId('side-peek-backdrop').onclick = closeSidePeek;
+byId('side-peek-notion').onclick = () => state.sidePeekUrl && window.hyeona.openLink(state.sidePeekUrl);
 window.addEventListener('focus',refreshDashboard);
 
 tickClock();

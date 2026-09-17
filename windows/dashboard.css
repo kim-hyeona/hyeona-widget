@@ -119,6 +119,16 @@ button:focus-visible,[role=button]:focus-visible { outline:2px solid #96bac8; ou
 .side-peek-body pre { overflow:auto; padding:14px; border-radius:10px; background:#f5f2ef; font-size:12px; }
 .side-peek-body img { display:block; max-width:100%; margin:16px 0; border-radius:12px; }
 .side-peek-empty { padding:45px 0; color:#aaa09a; text-align:center; }
+.peek-save-button { color:#587783; border-color:#cfe0e5; background:#f0f7f8; }
+.peek-editor-depth.depth-1,.peek-editor-depth.depth-2 { padding-left:18px; }
+.peek-editor-block { position:relative; margin:0 0 14px; }
+.peek-editor-label { margin:0 0 5px; color:#b1a49d; font-size:9px; letter-spacing:.1em; text-transform:uppercase; }
+.peek-editor-block textarea,.peek-new-block textarea { box-sizing:border-box; width:100%; min-height:54px; padding:11px 13px; resize:vertical; border:1px solid #e6dfdb; border-radius:10px; outline:none; background:#fff; color:#514945; font:14px/1.65 Arial,sans-serif; }
+.peek-editor-block textarea:focus,.peek-new-block textarea:focus { border-color:#aecbd5; box-shadow:0 0 0 3px rgba(174,203,213,.15); }
+.peek-editor-check { display:flex; gap:6px; align-items:center; margin:0 0 6px; color:#82766f; font-size:11px; }
+.peek-new-block { margin-top:28px; padding-top:22px; border-top:1px solid #e8e1dd; }
+.peek-new-block label { display:block; margin-bottom:8px; color:#8b7e77; font-size:11px; letter-spacing:.08em; }
+.peek-new-block textarea { min-height:100px; }
 @media(max-width:1100px) {
   .utility-row { grid-template-columns:auto 1fr; gap:24px; }
   .dashboard-grid { grid-template-columns:minmax(0,3fr) minmax(220px,1fr); gap:24px; }

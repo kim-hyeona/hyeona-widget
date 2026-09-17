@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('hyeona', {
   updateItem: (token, type, id, payload) => ipcRenderer.invoke('item:update', token, type, id, payload),
   deleteItem: (token, id) => ipcRenderer.invoke('item:delete', token, id),
   loadPageDetail: (token, id) => ipcRenderer.invoke('page:detail', token, id),
+  savePageDetail: (token, id, payload) => ipcRenderer.invoke('page:save-detail', token, id, payload),
   openLink: (url) => ipcRenderer.invoke('link:open', url),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   setSettings: (settings) => ipcRenderer.invoke('settings:set', settings),

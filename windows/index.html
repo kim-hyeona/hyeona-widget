@@ -659,6 +659,8 @@ button:disabled { cursor:wait; opacity:.55; }
       <h2 id="side-peek-title">상세 내용</h2>
     </div>
     <div class="side-peek-actions">
+      <button class="ghost-button" id="side-peek-edit" hidden>편집</button>
+      <button class="ghost-button peek-save-button" id="side-peek-save" hidden>노션에 저장</button>
       <button class="ghost-button" id="side-peek-notion">노션에서 열기 ↗</button>
       <button class="close-button" id="side-peek-close" aria-label="닫기">×</button>
     </div>
@@ -690,7 +692,10 @@ let state = {
   brainDirty:false,
   brainSaving:false,
   careWeekOffset:0,
-  cyclePlan:{}
+  cyclePlan:{},
+  sidePeekUrl:'',
+  sidePeekDetail:null,
+  sidePeekEditing:false
 };
 
 const byId = (id) => document.getElementById(id);
@@ -787,9 +792,54 @@ function renderNotionBlocks(blocks, depth = 0) {
   }).join('');
 }
 
+const EDITABLE_NOTION_BLOCKS = new Set([
+  'paragraph','heading_1','heading_2','heading_3','bulleted_list_item',
+  'numbered_list_item','to_do','quote','callout','code'
+]);
+
+function renderNotionEditor(blocks, depth = 0) {
+  return (blocks || []).map((block) => {
+    let content;
+    if (EDITABLE_NOTION_BLOCKS.has(block.type)) {
+      const todo = block.type === 'to_do'
+        ? '<label class="peek-editor-check"><input type="checkbox" class="peek-edit-checked" ' + (block.checked ? 'checked' : '') + '> 완료</label>'
+        : '';
+      content = '<div class="peek-editor-block" data-id="' + escapeHtml(block.id) + '" data-type="' + escapeHtml(block.type) + '" data-language="' + escapeHtml(block.language || '') + '">' +
+        '<div class="peek-editor-label">' + escapeHtml(block.type.replaceAll('_',' ')) + '</div>' + todo +
+        '<textarea class="peek-edit-text" spellcheck="false" rows="' + (block.type.startsWith('heading') ? '1' : '2') + '">' + escapeHtml(block.text || '') + '</textarea></div>';
+    } else {
+      content = renderNotionBlocks([Object.assign({},block,{ children:[] })],depth);
+    }
+    const children = renderNotionEditor(block.children || [],depth + 1);
+    return '<div class="peek-editor-depth depth-' + Math.min(depth,2) + '">' + content + children + '</div>';
+  }).join('');
+}
+
+function renderSidePeek() {
+  const detail = state.sidePeekDetail;
+  const editButton = byId('side-peek-edit');
+  const saveButton = byId('side-peek-save');
+  editButton.hidden = !detail;
+  saveButton.hidden = !detail || !state.sidePeekEditing;
+  editButton.textContent = state.sidePeekEditing ? '취소' : '편집';
+  if (!detail) return;
+  if (state.sidePeekEditing) {
+    byId('side-peek-body').innerHTML = renderNotionEditor(detail.blocks || []) +
+      '<div class="peek-new-block"><label for="side-peek-new-text">새 내용 추가</label>' +
+      '<textarea id="side-peek-new-text" rows="4" spellcheck="false" placeholder="새 문단을 입력하세요. 문단 사이는 한 줄 비워 주세요."></textarea></div>';
+    disableSpellcheck(byId('side-peek-body'));
+  } else {
+    byId('side-peek-body').innerHTML = renderNotionBlocks(detail.blocks || []);
+  }
+}
+
 async function openSidePeek(type,item) {
   const peek = byId('side-peek');
   state.sidePeekUrl = '';
+  state.sidePeekDetail = null;
+  state.sidePeekEditing = false;
+  byId('side-peek-edit').hidden = true;
+  byId('side-peek-save').hidden = true;
   byId('side-peek-title').textContent = item.title || '상세 내용';
   byId('side-peek-meta').textContent = type === 'calendar' && item.date ? item.date : (type === 'memo' ? 'MEMO' : '');
   byId('side-peek-body').innerHTML = '<div class="side-peek-empty">노션에서 불러오는 중…</div>';
@@ -800,8 +850,9 @@ async function openSidePeek(type,item) {
     const detail = await window.hyeona.loadPageDetail(state.token,item.id);
     if (!peek.classList.contains('open')) return;
     state.sidePeekUrl = detail.url || '';
+    state.sidePeekDetail = detail;
     byId('side-peek-title').textContent = detail.title || item.title || '상세 내용';
-    byId('side-peek-body').innerHTML = renderNotionBlocks(detail.blocks || []);
+    renderSidePeek();
   } catch (error) {
     byId('side-peek-body').innerHTML = '<div class="side-peek-empty">상세 내용을 불러오지 못했어요.<br>' + escapeHtml(error.message) + '</div>';
   }
@@ -811,6 +862,38 @@ function closeSidePeek() {
   byId('side-peek').classList.remove('open');
   byId('side-peek').setAttribute('aria-hidden','true');
   byId('side-peek-backdrop').classList.remove('open');
+}
+
+async function saveSidePeek() {
+  if (!state.sidePeekDetail || !state.sidePeekEditing) return;
+  const saveButton = byId('side-peek-save');
+  const updates = [...document.querySelectorAll('.peek-editor-block')].map((block) => ({
+    id:block.dataset.id,
+    type:block.dataset.type,
+    language:block.dataset.language || '',
+    text:block.querySelector('.peek-edit-text').value,
+    checked:!!block.querySelector('.peek-edit-checked')?.checked
+  }));
+  saveButton.disabled = true;
+  saveButton.textContent = '저장 중…';
+  byId('side-peek-meta').textContent = '노션에 저장하는 중…';
+  try {
+    await window.hyeona.savePageDetail(state.token,state.sidePeekDetail.id,{
+      updates,
+      newText:byId('side-peek-new-text').value
+    });
+    const detail = await window.hyeona.loadPageDetail(state.token,state.sidePeekDetail.id);
+    state.sidePeekDetail = detail;
+    state.sidePeekUrl = detail.url || state.sidePeekUrl;
+    state.sidePeekEditing = false;
+    byId('side-peek-meta').textContent = '노션에 저장됐어요 ✓';
+    renderSidePeek();
+  } catch (error) {
+    byId('side-peek-meta').textContent = '저장 실패 · ' + error.message;
+  } finally {
+    saveButton.disabled = false;
+    saveButton.textContent = '노션에 저장';
+  }
 }
 
 function fillCycleForm() {
@@ -1312,6 +1395,11 @@ window.addEventListener('keydown', (event) => {
 byId('side-peek-close').onclick = closeSidePeek;
 byId('side-peek-backdrop').onclick = closeSidePeek;
 byId('side-peek-notion').onclick = () => state.sidePeekUrl && window.hyeona.openLink(state.sidePeekUrl);
+byId('side-peek-edit').onclick = () => {
+  state.sidePeekEditing = !state.sidePeekEditing;
+  renderSidePeek();
+};
+byId('side-peek-save').onclick = saveSidePeek;
 window.addEventListener('focus',refreshDashboard);
 
 tickClock();

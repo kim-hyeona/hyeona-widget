@@ -58,6 +58,16 @@ function richTextValue(items) {
   return (items || []).map((item) => item.plain_text || '').join('');
 }
 
+function richTextChunks(value) {
+  const text = String(value == null ? '' : value);
+  if (!text) return [];
+  const chunks = [];
+  for (let index = 0; index < text.length; index += 1900) {
+    chunks.push({ type: 'text', text: { content: text.slice(index,index + 1900) } });
+  }
+  return chunks;
+}
+
 async function loadBlockChildren(token, blockId, depth = 0) {
   const blocks = [];
   let cursor;
@@ -407,6 +417,34 @@ ipcMain.handle('page:detail', async (_event, token, id) => {
     url: page.url || '',
     blocks: await loadBlockChildren(token, id),
   };
+});
+
+ipcMain.handle('page:save-detail', async (_event, token, id, payload = {}) => {
+  const editableTypes = new Set([
+    'paragraph','heading_1','heading_2','heading_3','bulleted_list_item',
+    'numbered_list_item','to_do','quote','callout','code',
+  ]);
+  const updates = Array.isArray(payload.updates) ? payload.updates : [];
+  for (const update of updates) {
+    if (!update || !update.id || !editableTypes.has(update.type)) continue;
+    const value = { rich_text: richTextChunks(update.text) };
+    if (update.type === 'to_do') value.checked = !!update.checked;
+    if (update.type === 'code') value.language = update.language || 'plain text';
+    await notion(token, 'blocks/' + update.id, 'PATCH', { [update.type]: value });
+  }
+
+  const newText = String(payload.newText || '').trim();
+  if (newText) {
+    const children = newText.split(/\n{2,}/).map((text) => text.trim()).filter(Boolean).map((text) => ({
+      object: 'block',
+      type: 'paragraph',
+      paragraph: { rich_text: richTextChunks(text) },
+    }));
+    for (let index = 0; index < children.length; index += 100) {
+      await notion(token, 'blocks/' + id + '/children', 'PATCH', { children: children.slice(index,index + 100) });
+    }
+  }
+  return { ok: true };
 });
 
 ipcMain.handle('link:open', async (_event, url) => shell.openExternal(url));

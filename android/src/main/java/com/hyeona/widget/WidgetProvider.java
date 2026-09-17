@@ -10,6 +10,8 @@ public class WidgetProvider extends AppWidgetProvider {
     public static final String ACTION_REFRESH = "com.hyeona.widget.REFRESH";
     public static final String ACTION_PREV_MONTH = "com.hyeona.widget.PREV_MONTH";
     public static final String ACTION_NEXT_MONTH = "com.hyeona.widget.NEXT_MONTH";
+    public static final String ACTION_PREV_CARE_WEEK = "com.hyeona.widget.PREV_CARE_WEEK";
+    public static final String ACTION_NEXT_CARE_WEEK = "com.hyeona.widget.NEXT_CARE_WEEK";
     @Override public void onUpdate(Context c, AppWidgetManager m, int[] ids) { WidgetUpdater.update(c, m, ids); }
     @Override public void onReceive(Context c, Intent i) {
         super.onReceive(c, i);
@@ -17,5 +19,7 @@ public class WidgetProvider extends AppWidgetProvider {
         if (ACTION_REFRESH.equals(i.getAction())) WidgetUpdater.updateAll(c);
         if (ACTION_PREV_MONTH.equals(i.getAction())) WidgetUpdater.moveMonth(c, -1);
         if (ACTION_NEXT_MONTH.equals(i.getAction())) WidgetUpdater.moveMonth(c, 1);
+        if (ACTION_PREV_CARE_WEEK.equals(i.getAction())) WidgetUpdater.moveCareWeek(c, -1);
+        if (ACTION_NEXT_CARE_WEEK.equals(i.getAction())) WidgetUpdater.moveCareWeek(c, 1);
     }
 }

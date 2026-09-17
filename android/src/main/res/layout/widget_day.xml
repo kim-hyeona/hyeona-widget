@@ -14,8 +14,8 @@
         android:layout_height="26dp"
         android:gravity="center"
         android:text="1"
-        android:textSize="15sp"
-        android:textColor="#263E43" />
+        android:textSize="12sp"
+        android:textColor="#566A70" />
     <TextView
         android:id="@+id/day_event"
         android:layout_width="match_parent"
@@ -24,7 +24,7 @@
         android:maxLines="2"
         android:ellipsize="end"
         android:text=""
-        android:textSize="14sp"
-        android:textColor="#355A65"
-        android:background="#99CBE7ED" />
+        android:textSize="10sp"
+        android:textColor="#627B82"
+        android:background="#88E3F1F3" />
 </LinearLayout>

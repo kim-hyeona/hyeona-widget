@@ -104,7 +104,9 @@ button:focus-visible,[role=button]:focus-visible { outline:2px solid #96bac8; ou
 .side-peek.open { transform:translateX(0); }
 .side-peek-head { display:flex; justify-content:space-between; align-items:flex-start; gap:18px; padding-bottom:22px; border-bottom:1px solid #e8e1dd; }
 .side-peek-head h2 { margin:0; font:400 25px Georgia,Batang,serif; color:#514945; line-height:1.35; }
+.side-peek-title-input { width:min(100%,310px); padding:4px 0 7px; border:0; border-bottom:1px solid #aecbd5; outline:0; background:transparent; color:#514945; font:400 25px/1.35 Georgia,Batang,serif; }
 .side-peek-actions { display:flex; align-items:center; gap:8px; flex:0 0 auto; }
+.peek-delete-button { color:#a76a70; border-color:#ead7d8; background:#fff8f8; }
 .side-peek-meta { min-height:44px; padding:14px 0; color:#a2948d; font-size:11px; }
 .side-peek-body { color:#554d49; font-size:14px; line-height:1.85; }
 .side-peek-body p { margin:0 0 12px; white-space:pre-wrap; }

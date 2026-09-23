@@ -686,6 +686,7 @@ button:disabled { cursor:wait; opacity:.55; }
     <div class="side-peek-actions">
       <button class="ghost-button" id="side-peek-edit" hidden>편집</button>
       <button class="ghost-button peek-save-button" id="side-peek-save" hidden>노션에 저장</button>
+      <button class="ghost-button peek-delete-button" id="side-peek-delete" hidden>삭제</button>
       <button class="ghost-button" id="side-peek-notion">노션에서 열기 ↗</button>
       <button class="close-button" id="side-peek-close" aria-label="닫기">×</button>
     </div>
@@ -721,6 +722,7 @@ let state = {
   cyclePlan:{},
   sidePeekUrl:'',
   sidePeekDetail:null,
+  sidePeekType:'',
   sidePeekEditing:false,
   careEntry:null
 };
@@ -871,16 +873,20 @@ function renderSidePeek() {
   const detail = state.sidePeekDetail;
   const editButton = byId('side-peek-edit');
   const saveButton = byId('side-peek-save');
+  const deleteButton = byId('side-peek-delete');
   editButton.hidden = !detail;
   saveButton.hidden = !detail || !state.sidePeekEditing;
+  deleteButton.hidden = !detail;
   editButton.textContent = state.sidePeekEditing ? '취소' : '편집';
   if (!detail) return;
   if (state.sidePeekEditing) {
+    byId('side-peek-title').innerHTML = '<input id="side-peek-title-input" class="side-peek-title-input" spellcheck="false" maxlength="500" value="' + escapeHtml(detail.title || '') + '">';
     byId('side-peek-body').innerHTML = renderNotionEditor(detail.blocks || []) +
       '<div class="peek-new-block"><label for="side-peek-new-text">새 내용 추가</label>' +
       '<textarea id="side-peek-new-text" rows="4" spellcheck="false" placeholder="새 문단을 입력하세요. 문단 사이는 한 줄 비워 주세요."></textarea></div>';
     disableSpellcheck(byId('side-peek-body'));
   } else {
+    byId('side-peek-title').textContent = detail.title || '상세 내용';
     byId('side-peek-body').innerHTML = renderNotionBlocks(detail.blocks || []);
   }
 }
@@ -889,9 +895,11 @@ async function openSidePeek(type,item) {
   const peek = byId('side-peek');
   state.sidePeekUrl = '';
   state.sidePeekDetail = null;
+  state.sidePeekType = type;
   state.sidePeekEditing = false;
   byId('side-peek-edit').hidden = true;
   byId('side-peek-save').hidden = true;
+  byId('side-peek-delete').hidden = true;
   byId('side-peek-title').textContent = item.title || '상세 내용';
   byId('side-peek-meta').textContent = type === 'calendar' && item.date ? item.date : (type === 'memo' ? 'MEMO' : (type === 'todo' ? 'TODAY' : ''));
   byId('side-peek-body').innerHTML = '<div class="side-peek-empty">노션에서 불러오는 중…</div>';
@@ -931,6 +939,7 @@ async function saveSidePeek() {
   byId('side-peek-meta').textContent = '노션에 저장하는 중…';
   try {
     await window.hyeona.savePageDetail(state.token,state.sidePeekDetail.id,{
+      title:byId('side-peek-title-input').value,
       updates,
       newText:byId('side-peek-new-text').value
     });
@@ -945,6 +954,24 @@ async function saveSidePeek() {
   } finally {
     saveButton.disabled = false;
     saveButton.textContent = '노션에 저장';
+  }
+}
+
+async function deleteSidePeek() {
+  if (!state.sidePeekDetail) return;
+  if (!confirm('이 항목을 노션에서 삭제할까요?')) return;
+  const deleteButton = byId('side-peek-delete');
+  deleteButton.disabled = true;
+  deleteButton.textContent = '삭제 중…';
+  try {
+    await window.hyeona.deleteItem(state.token,state.sidePeekDetail.id);
+    closeSidePeek();
+    await refreshDashboard();
+  } catch (error) {
+    byId('side-peek-meta').textContent = '삭제 실패 · ' + error.message;
+  } finally {
+    deleteButton.disabled = false;
+    deleteButton.textContent = '삭제';
   }
 }
 
@@ -1474,6 +1501,7 @@ byId('side-peek-edit').onclick = () => {
   renderSidePeek();
 };
 byId('side-peek-save').onclick = saveSidePeek;
+byId('side-peek-delete').onclick = deleteSidePeek;
 window.addEventListener('focus',refreshDashboard);
 
 tickClock();

@@ -107,6 +107,12 @@ function pageTitle(page) {
   return '';
 }
 
+function pageTitleProperty(page) {
+  const props = page && page.properties || {};
+  const entry = Object.entries(props).find(([,value]) => value && value.type === 'title');
+  return entry ? entry[0] : '';
+}
+
 const databaseShapes = new Map();
 
 async function databaseShape(token, databaseId, required = {}) {
@@ -466,12 +472,26 @@ ipcMain.handle('page:detail', async (_event, token, id) => {
   return {
     id: page.id,
     title: pageTitle(page) || '상세 내용',
+    titleProperty: pageTitleProperty(page),
     url: page.url || '',
     blocks: await loadBlockChildren(token, id),
   };
 });
 
 ipcMain.handle('page:save-detail', async (_event, token, id, payload = {}) => {
+  if (payload.title !== undefined) {
+    const page = await notion(token, 'pages/' + id);
+    const titleProperty = pageTitleProperty(page);
+    if (!titleProperty) throw new Error('제목 속성을 찾지 못했어요.');
+    const title = String(payload.title || '').trim();
+    if (!title) throw new Error('제목은 비워둘 수 없어요.');
+    await notion(token, 'pages/' + id, 'PATCH', {
+      properties: {
+        [titleProperty]: { title: richTextChunks(title.slice(0,500)) },
+      },
+    });
+  }
+
   const editableTypes = new Set([
     'paragraph','heading_1','heading_2','heading_3','bulleted_list_item',
     'numbered_list_item','to_do','quote','callout','code',

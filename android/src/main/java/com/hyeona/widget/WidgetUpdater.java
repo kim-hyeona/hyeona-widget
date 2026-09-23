@@ -33,7 +33,7 @@ public final class WidgetUpdater {
     private static final String MEMO_DB = "3cd946f4-5bc2-80db-afae-c68c50665447";
     private static final String ROUTINE_DB = "9d7cbaca-0027-4f12-a6d0-16927ffb0296";
     private static final String BRAIN_PAGE = "3ce946f4-5bc2-81ab-9e97-d2aa17504ea9";
-    private static final String NOTION_DASHBOARD = "https://www.notion.so/35b946f45bc280d393f0ee3c366a283b";
+    private static final String NOTION_DASHBOARD = "https://www.notion.so/35b946f45bc2806798f4fec2232a2dfd";
     private static final int[] WEEKS = {R.id.week1, R.id.week2, R.id.week3, R.id.week4, R.id.week5, R.id.week6};
 
     static void updateAll(Context c) {
@@ -56,6 +56,10 @@ public final class WidgetUpdater {
                 try { d.money = fetchMoneySummary(token); } catch (Exception ignored) { }
                 try { d.wishes = fetchCount(token, WISHLIST_DB); } catch (Exception ignored) { }
                 try { d.memos = fetchSimple(token, MEMO_DB, "제목", false); } catch (Exception ignored) { }
+                try {
+                    for (NotionClient.Item item : NotionClient.query(token, "todo"))
+                        d.todos.add(new Event(item.id, item.title, "", item.done));
+                } catch (Exception ignored) { }
                 try { d.routines = fetchSimple(token, ROUTINE_DB, "항목", true); } catch (Exception ignored) { }
                 try { d.brain = fetchBrain(token); } catch (Exception ignored) { }
             }
@@ -90,7 +94,7 @@ public final class WidgetUpdater {
         int weeksNeeded = (int) Math.ceil((first + grid.getActualMaximum(Calendar.DAY_OF_MONTH)) / 7.0);
         grid.add(Calendar.DAY_OF_MONTH, -first);
         String todayKey = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date());
-        List<Event> today = byDate.containsKey(todayKey) ? byDate.get(todayKey) : new ArrayList<>();
+        List<Event> today = d.todos;
 
         for (int week = 0; week < 6; week++) {
             v.setViewVisibility(WEEKS[week], week < weeksNeeded ? View.VISIBLE : View.GONE);
@@ -128,7 +132,7 @@ public final class WidgetUpdater {
         bindCheckList(c, v, R.id.today_list, today, 100);
         bindTextList(c, v, R.id.memo_list, d.memos, "메모가 없어요");
         bindCheckList(c, v, R.id.routine_list, d.routines, 200);
-        setSectionLink(c, v, R.id.today_list, "calendar", 10);
+        setSectionLink(c, v, R.id.today_list, "todo", 10);
         setSectionLink(c, v, R.id.memo_list, "memo", 11);
         setSectionLink(c, v, R.id.routine_list, "routine", 12);
         v.setTextViewText(R.id.wish_summary, "♡ WISH · " + d.wishes);
@@ -195,8 +199,9 @@ public final class WidgetUpdater {
         for (int i = 0; i < 7; i++) {
             String icon = careIcon(day.getTime(), start, end, cycle);
             v.setTextViewText(ids[i], names[i] + "\n" + day.get(Calendar.DAY_OF_MONTH) + (icon.isEmpty() ? "" : "\n" + icon));
-            Intent care = new Intent(c, MainActivity.class).putExtra("section", "care");
-            v.setOnClickPendingIntent(ids[i], PendingIntent.getActivity(c, 40 + i, care, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
+            String date = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(day.getTime());
+            Intent care = new Intent(c, MainActivity.class).putExtra("section", "care").putExtra("care_date", date);
+            v.setOnClickPendingIntent(ids[i], PendingIntent.getActivity(c, 4000 + offset * 10 + i, care, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
             day.add(Calendar.DAY_OF_MONTH, 1);
         }
         Intent prev = new Intent(c, WidgetProvider.class).setAction(WidgetProvider.ACTION_PREV_CARE_WEEK);
@@ -327,7 +332,7 @@ public final class WidgetUpdater {
     }
 
     private static final class Dashboard {
-        List<Event> events = new ArrayList<>(), memos = new ArrayList<>(), routines = new ArrayList<>(); String error = "", money = "", brain = ""; int wishes = 0;
+        List<Event> events = new ArrayList<>(), todos = new ArrayList<>(), memos = new ArrayList<>(), routines = new ArrayList<>(); String error = "", money = "", brain = ""; int wishes = 0;
     }
     private static final class Event {
         final String id, title, date; final boolean done;

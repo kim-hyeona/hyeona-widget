@@ -495,6 +495,11 @@ button:disabled { cursor:wait; opacity:.55; }
 .small-button { border:0; border-radius:8px; padding:7px 9px; background:#f2efed; font-size:11px; }
 .small-button.danger { color:var(--danger); }
 .modal-status { min-height:18px; margin-top:10px; color:var(--muted); font-size:11px; }
+.care-entry-form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.care-entry-form label { display:flex; flex-direction:column; gap:6px; color:var(--muted); font-size:11px; }
+.care-entry-form textarea { min-height:86px; resize:vertical; }
+.care-entry-form .wide { grid-column:1 / -1; }
+.care-entry-actions { display:flex; justify-content:flex-end; align-items:center; gap:12px; margin-top:14px; }
 
 @media (max-width:1220px) {
   .utility-row { grid-template-columns:1fr 1fr; }
@@ -652,6 +657,26 @@ button:disabled { cursor:wait; opacity:.55; }
   </div>
 </div>
 
+<div class="modal" id="care-modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h2 id="care-modal-title">식단 / 관리</h2>
+      <button class="close-button" id="care-modal-close">×</button>
+    </div>
+    <form id="care-entry-form" class="care-entry-form">
+      <label>아침<textarea class="field" name="breakfast" spellcheck="false"></textarea></label>
+      <label>점심<textarea class="field" name="lunch" spellcheck="false"></textarea></label>
+      <label>저녁<textarea class="field" name="dinner" spellcheck="false"></textarea></label>
+      <label>간식<textarea class="field" name="snack" spellcheck="false"></textarea></label>
+      <label class="wide">관리 메모<textarea class="field" name="note" spellcheck="false"></textarea></label>
+      <div class="care-entry-actions wide">
+        <span class="modal-status" id="care-entry-status"></span>
+        <button class="primary-button" type="submit">노션에 저장</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <aside class="side-peek" id="side-peek" aria-hidden="true">
   <div class="side-peek-head">
     <div>
@@ -678,6 +703,7 @@ const TYPE_META = {
   bleeding:{ title:'BLEEDING · 가계부', add:'항목 추가' },
   wishlist:{ title:'WISHLIST', add:'위시 추가' },
   memo:{ title:'MEMO', add:'메모 추가' },
+  todo:{ title:'오늘 할 일', add:'할 일 추가' },
   routine:{ title:'평일 루틴', add:'루틴 추가' }
 };
 
@@ -695,7 +721,8 @@ let state = {
   cyclePlan:{},
   sidePeekUrl:'',
   sidePeekDetail:null,
-  sidePeekEditing:false
+  sidePeekEditing:false,
+  careEntry:null
 };
 
 const byId = (id) => document.getElementById(id);
@@ -762,12 +789,37 @@ function renderCareCalendar() {
     date.setDate(start.getDate() + index);
     const phase = cyclePhase(date,state.cyclePlan);
     const isToday = localDateString(date) === localDateString(now);
-    html += '<div class="care-day' + (phase ? ' ' + phase.key : '') + (isToday ? ' today' : '') + '">' +
+    html += '<button type="button" class="care-day' + (phase ? ' ' + phase.key : '') + (isToday ? ' today' : '') + '" data-care-date="' + localDateString(date) + '">' +
       '<span class="care-date">' + (date.getMonth() + 1) + '/' + date.getDate() + '</span>' +
       (phase ? '<span class="care-plan" aria-label="' + escapeHtml(phase.label) + '">' + phase.icon + '</span>' : '') +
-      '</div>';
+      '</button>';
   }
   byId('care-grid').innerHTML = html;
+  byId('care-grid').querySelectorAll('[data-care-date]').forEach((button) => {
+    button.addEventListener('click',() => openCareEditor(button.dataset.careDate));
+  });
+}
+
+async function openCareEditor(date) {
+  state.careEntry = null;
+  byId('care-modal-title').textContent = date + ' 식단 / 관리';
+  byId('care-entry-status').textContent = '노션에서 불러오는 중…';
+  byId('care-modal').style.display = 'flex';
+  const form = byId('care-entry-form');
+  form.reset();
+  try {
+    const entry = await window.hyeona.loadCare(state.token,date);
+    state.careEntry = entry;
+    for (const name of ['breakfast','lunch','dinner','snack','note']) form.elements[name].value = entry[name] || '';
+    byId('care-entry-status').textContent = '날짜 칸을 눌러 언제든 수정할 수 있어요';
+  } catch (error) {
+    byId('care-entry-status').textContent = '불러오기 실패 · ' + error.message;
+  }
+}
+
+function closeCareEditor() {
+  byId('care-modal').style.display = 'none';
+  state.careEntry = null;
 }
 
 function renderNotionBlocks(blocks, depth = 0) {
@@ -841,7 +893,7 @@ async function openSidePeek(type,item) {
   byId('side-peek-edit').hidden = true;
   byId('side-peek-save').hidden = true;
   byId('side-peek-title').textContent = item.title || '상세 내용';
-  byId('side-peek-meta').textContent = type === 'calendar' && item.date ? item.date : (type === 'memo' ? 'MEMO' : '');
+  byId('side-peek-meta').textContent = type === 'calendar' && item.date ? item.date : (type === 'memo' ? 'MEMO' : (type === 'todo' ? 'TODAY' : ''));
   byId('side-peek-body').innerHTML = '<div class="side-peek-empty">노션에서 불러오는 중…</div>';
   peek.classList.add('open');
   peek.setAttribute('aria-hidden','false');
@@ -1023,7 +1075,7 @@ function checkRow(item, type) {
     toggleCheckedItem(row,item,type);
   });
   row.querySelector('.row-text').addEventListener('click',() => {
-    if (type === 'calendar') openSidePeek(type,item);
+    if (type === 'calendar' || type === 'todo') openSidePeek(type,item);
     else toggleCheckedItem(row,item,type);
   });
   return row;
@@ -1037,7 +1089,7 @@ function renderTasks(items) {
     list.innerHTML = '<div class="empty">오늘 할 일이 없어요 ♡</div>';
     return;
   }
-  items.forEach((item) => list.appendChild(checkRow(item,'calendar')));
+  items.forEach((item) => list.appendChild(checkRow(item,'todo')));
 }
 
 function renderRoutine(routine) {
@@ -1122,6 +1174,7 @@ async function refreshDashboard() {
 function itemsFor(type) {
   if (!state.data) return [];
   if (type === 'calendar') return state.data.events || [];
+  if (type === 'todo') return state.data.todayEvents || [];
   if (type === 'bleeding') return state.data.bleeding.items || [];
   if (type === 'wishlist') return state.data.wishlist.items || [];
   if (type === 'routine') return state.data.routine.items || [];
@@ -1155,7 +1208,7 @@ function collectPayload(type, form) {
     payload.date = formData.get('date');
     payload.done = false;
   }
-  if (type === 'routine') payload.done = false;
+  if (type === 'routine' || type === 'todo') payload.done = false;
   if (type === 'bleeding') {
     payload.amount = Number(formData.get('amount') || 0);
     payload.memo = formData.get('memo') || '';
@@ -1217,7 +1270,7 @@ function renderEditor() {
   items.forEach((item) => {
     const row = document.createElement('div');
     row.className = 'edit-row';
-    const supportsDone = ['calendar','bleeding','routine'].includes(type);
+    const supportsDone = ['calendar','bleeding','routine','todo'].includes(type);
     row.innerHTML =
       (supportsDone ? '<button class="small-button done-button">' + (item.done ? '✓' : '○') + '</button>' : '<span></span>') +
       '<input class="field" data-field="title" value="' + escapeHtml(item.title) + '">' +
@@ -1323,7 +1376,7 @@ byId('location-button').onclick = useCurrentLocation;
 byId('bleeding-card').onclick = () => openEditor('bleeding');
 byId('wishlist-card').onclick = () => openEditor('wishlist');
 byId('calendar-add').onclick = () => openEditor('calendar');
-byId('today-add').onclick = () => openEditor('calendar');
+byId('today-add').onclick = () => openEditor('todo');
 byId('routine-add').onclick = () => openEditor('routine');
 byId('memo-add').onclick = () => openEditor('memo');
 byId('grind-button').onclick = () => state.data && window.hyeona.openLink(state.data.links.grind);
@@ -1335,6 +1388,25 @@ byId('care-prev').onclick = () => {
 byId('care-next').onclick = () => {
   state.careWeekOffset += 1;
   renderCareCalendar();
+};
+byId('care-entry-form').onsubmit = async (event) => {
+  event.preventDefault();
+  if (!state.careEntry) return;
+  const formData = new FormData(event.currentTarget);
+  const entry = { id:state.careEntry.id || '', date:state.careEntry.date };
+  for (const name of ['breakfast','lunch','dinner','snack','note']) entry[name] = formData.get(name) || '';
+  const button = event.currentTarget.querySelector('button[type="submit"]');
+  button.disabled = true;
+  byId('care-entry-status').textContent = '노션에 저장 중…';
+  try {
+    const saved = await window.hyeona.saveCare(state.token,entry);
+    state.careEntry.id = saved.id || state.careEntry.id;
+    byId('care-entry-status').textContent = '노션에 저장됐어요 ✓';
+  } catch (error) {
+    byId('care-entry-status').textContent = '저장 실패 · ' + error.message;
+  } finally {
+    button.disabled = false;
+  }
 };
 byId('cycle-form').onsubmit = async (event) => {
   event.preventDefault();
@@ -1384,12 +1456,14 @@ byId('brain-dump').addEventListener('blur',saveBrainDump);
 
 byId('modal-close').onclick = closeEditor;
 byId('modal').onclick = (event) => { if (event.target === byId('modal')) closeEditor(); };
+byId('care-modal-close').onclick = closeCareEditor;
+byId('care-modal').onclick = (event) => { if (event.target === byId('care-modal')) closeCareEditor(); };
 window.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && byId('side-peek').classList.contains('open')) {
     closeSidePeek();
     return;
   }
-  if (event.key === 'Escape') closeEditor();
+  if (event.key === 'Escape') { closeEditor(); closeCareEditor(); }
   if (event.ctrlKey && event.key === 'Enter' && document.activeElement === byId('brain-dump')) saveBrainDump();
 });
 byId('side-peek-close').onclick = closeSidePeek;

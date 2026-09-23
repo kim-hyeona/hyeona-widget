@@ -6,8 +6,12 @@ const CALENDAR_DB = '3cd946f45bc2803da355faf7751fb866';
 const BLEEDING_DB = 'c07869fbaaa746a593663a5ff92ebd22';
 const WISHLIST_DB = '3cd946f45bc280cb875cfe998bc81776';
 const MEMO_DB = '3cd946f45bc280dbafaec68c50665447';
+const TODO_DB = '3cd946f45bc280599404f0b86f771142';
 const ROUTINE_DB = '9d7cbaca00274f12a6d016927ffb0296';
 const BRAINDUMP_PAGE = '3ce946f45bc281ab9e97d2aa17504ea9';
+const DASHBOARD_PAGE = '35b946f45bc2806798f4fec2232a2dfd';
+const DASHBOARD_URL = 'https://www.notion.so/' + DASHBOARD_PAGE;
+const CARE_DB = '3e4946f45bc28044bdf0ed652e378396';
 const GRIND_URL = 'https://app.notion.com/p/35b946f45bc280aba379da06addd2eec';
 const PACKAGING_URL = 'https://app.notion.com/p/35b946f45bc280d393f0ee3c366a283b';
 
@@ -103,6 +107,27 @@ function pageTitle(page) {
   return '';
 }
 
+const databaseShapes = new Map();
+
+async function databaseShape(token, databaseId, required = {}) {
+  const cacheKey = databaseId + ':' + Object.keys(required).sort().join(',');
+  if (databaseShapes.has(cacheKey)) return databaseShapes.get(cacheKey);
+  const database = await notion(token, 'databases/' + databaseId);
+  const properties = database.properties || {};
+  const title = Object.entries(properties).find(([,value]) => value && value.type === 'title');
+  if (!title) throw new Error('데이터베이스에 제목 속성이 필요해요.');
+  const missing = {};
+  for (const [name,type] of Object.entries(required)) {
+    if (!properties[name]) missing[name] = { [type]: {} };
+  }
+  if (Object.keys(missing).length) {
+    await notion(token, 'databases/' + databaseId, 'PATCH', { properties: missing });
+  }
+  const shape = { title: title[0] };
+  databaseShapes.set(cacheKey, shape);
+  return shape;
+}
+
 function ymd(d) {
   return [
     d.getFullYear(),
@@ -166,6 +191,10 @@ ipcMain.handle('dashboard:load', async (_event, token, offsetWeeks = 0) => {
       page_size: 50,
     }), { results: [] }),
     safeLoad(errors, '브레인덤프', () => notion(token, 'pages/' + BRAINDUMP_PAGE), { properties: {} }),
+    safeLoad(errors, '오늘 할 일', () => notion(token, 'databases/' + TODO_DB + '/query', 'POST', {
+      page_size: 100,
+      sorts: [{ timestamp: 'last_edited_time', direction: 'descending' }],
+    }), { results: [] }),
   ]);
 
   const calRes = results[0];
@@ -174,6 +203,7 @@ ipcMain.handle('dashboard:load', async (_event, token, offsetWeeks = 0) => {
   const memoRes = results[3];
   const routineRes = results[4];
   const dumpRes = results[5];
+  const todoRes = results[6];
 
   const events = calRes.results.map((p) => ({
     id: p.id,
@@ -224,6 +254,12 @@ ipcMain.handle('dashboard:load', async (_event, token, offsetWeeks = 0) => {
     done: !!(p.properties['완료'] && p.properties['완료'].checkbox),
   }));
 
+  const todo = todoRes.results.map((p) => ({
+    id: p.id,
+    title: pageTitle(p) || '할 일',
+    done: !!(p.properties['완료'] && p.properties['완료'].checkbox),
+  }));
+
   const remoteBrainDump = plainText(dumpRes.properties && dumpRes.properties['내용']);
   const settings = loadSettings();
   const brainDump = settings.brainDraftDirty && typeof settings.brainDraft === 'string'
@@ -234,25 +270,10 @@ ipcMain.handle('dashboard:load', async (_event, token, offsetWeeks = 0) => {
     mergeSettings({ brainDraft: remoteBrainDump });
   }
 
-  async function loadTodayEvents() {
-    const visibleToday = events.filter((item) => item.date === todayStr);
-    if (calendarDays.some((day) => day.isToday)) return visibleToday;
-    const todayRes = await safeLoad(errors, '오늘 일정', () => notion(token, 'databases/' + CALENDAR_DB + '/query', 'POST', {
-      page_size: 100,
-      filter: { property: '날짜', date: { equals: todayStr } },
-    }), { results: [] });
-    return todayRes.results.map((p) => ({
-      id: p.id,
-      title: plainTitle(p.properties['이름']) || '할 일',
-      done: !!(p.properties['완료'] && p.properties['완료'].checkbox),
-      date: p.properties['날짜'] && p.properties['날짜'].date ? p.properties['날짜'].date.start : '',
-    }));
-  }
-
   return {
     monthLabel,
     calendarDays,
-    todayEvents: await loadTodayEvents(),
+    todayEvents: todo,
     events,
     bleeding: { sum: bleedingSum, monthLabel: budgetMonth, items: bleedingItems },
     wishlist: {
@@ -301,19 +322,9 @@ ipcMain.handle('weather:load', async (_event, latitude, longitude) => {
 });
 
 ipcMain.handle('notion:dashboard-page', async (_event, token) => {
-  const result = await notion(token, 'search', 'POST', {
-    query: 'life is bitch',
-    filter: { property: 'object', value: 'page' },
-    page_size: 50,
-  });
-  const pages = result.results || [];
-  const exact = pages.find((page) => pageTitle(page).trim().toLowerCase() === 'life is bitch');
-  const candidate = exact || pages[0];
-  if (!candidate || !candidate.url) {
-    throw new Error('노션에서 life is bitch 페이지를 찾지 못했어요.');
-  }
-  await shell.openExternal(candidate.url);
-  return candidate.url;
+  await notion(token, 'pages/' + DASHBOARD_PAGE);
+  await shell.openExternal(DASHBOARD_URL);
+  return DASHBOARD_URL;
 });
 
 ipcMain.handle('task:toggle', async (_event, token, id, done) => {
@@ -354,6 +365,7 @@ const TYPES = {
   bleeding: { db: BLEEDING_DB, title: '항목' },
   wishlist: { db: WISHLIST_DB, title: '이름' },
   memo: { db: MEMO_DB, title: '제목' },
+  todo: { db: TODO_DB, title: null },
   routine: { db: ROUTINE_DB, title: '항목' },
 };
 
@@ -363,16 +375,17 @@ function typeConfig(type) {
   return config;
 }
 
-function itemProperties(type, payload, partial = false) {
+async function itemProperties(token, type, payload, partial = false) {
   const config = typeConfig(type);
   const props = {};
+  const titleProperty = config.title || (await databaseShape(token,config.db,{ 완료:'checkbox' })).title;
 
   if (!partial || payload.title !== undefined) {
-    props[config.title] = {
+    props[titleProperty] = {
       title: [{ text: { content: String(payload.title || '').slice(0, 500) } }],
     };
   }
-  if (payload.done !== undefined && ['calendar', 'bleeding', 'routine'].includes(type)) {
+  if (payload.done !== undefined && ['calendar', 'bleeding', 'routine', 'todo'].includes(type)) {
     props['완료'] = { checkbox: !!payload.done };
   }
   if (type === 'calendar' && payload.date !== undefined) {
@@ -395,14 +408,53 @@ ipcMain.handle('item:create', async (_event, token, type, payload) => {
   const config = typeConfig(type);
   return notion(token, 'pages', 'POST', {
     parent: { database_id: config.db },
-    properties: itemProperties(type, payload),
+    properties: await itemProperties(token, type, payload),
   });
 });
 
 ipcMain.handle('item:update', async (_event, token, type, id, payload) => {
   return notion(token, 'pages/' + id, 'PATCH', {
-    properties: itemProperties(type, payload, true),
+    properties: await itemProperties(token, type, payload, true),
   });
+});
+
+ipcMain.handle('care:load', async (_event, token, date) => {
+  const required = { 날짜:'date', 아침:'rich_text', 점심:'rich_text', 저녁:'rich_text', 간식:'rich_text', '관리 메모':'rich_text' };
+  const shape = await databaseShape(token,CARE_DB,required);
+  const data = await notion(token, 'databases/' + CARE_DB + '/query', 'POST', {
+    page_size: 10,
+    filter: { property:'날짜', date:{ equals:date } },
+  });
+  const page = (data.results || [])[0];
+  if (!page) return { id:'', date, breakfast:'', lunch:'', dinner:'', snack:'', note:'' };
+  const props = page.properties || {};
+  return {
+    id:page.id,
+    date,
+    breakfast:plainText(props['아침']),
+    lunch:plainText(props['점심']),
+    dinner:plainText(props['저녁']),
+    snack:plainText(props['간식']),
+    note:plainText(props['관리 메모']),
+    titleProperty:shape.title,
+  };
+});
+
+ipcMain.handle('care:save', async (_event, token, entry) => {
+  const required = { 날짜:'date', 아침:'rich_text', 점심:'rich_text', 저녁:'rich_text', 간식:'rich_text', '관리 메모':'rich_text' };
+  const shape = await databaseShape(token,CARE_DB,required);
+  const text = (value) => ({ rich_text:richTextChunks(String(value || '').trim()) });
+  const properties = {
+    [shape.title]:{ title:richTextChunks(entry.date + ' 식단') },
+    날짜:{ date:{ start:entry.date } },
+    아침:text(entry.breakfast),
+    점심:text(entry.lunch),
+    저녁:text(entry.dinner),
+    간식:text(entry.snack),
+    '관리 메모':text(entry.note),
+  };
+  if (entry.id) return notion(token, 'pages/' + entry.id, 'PATCH', { properties });
+  return notion(token, 'pages', 'POST', { parent:{ database_id:CARE_DB }, properties });
 });
 
 ipcMain.handle('item:delete', async (_event, token, id) => {

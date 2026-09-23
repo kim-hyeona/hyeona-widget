@@ -80,7 +80,8 @@ body { min-width:760px; background:#fefcfb; }
 .care-dow { padding:10px; border-right:1px solid #e7e1dd; border-bottom:1px solid #e7e1dd; color:#ab9d96; text-align:center; font-size:10px; }
 .care-dow:first-child { color:#c997a2; }
 .care-dow:nth-child(7) { color:#8daeba; }
-.care-day { min-height:88px; padding:10px; border-right:1px solid #e7e1dd; border-bottom:1px solid #e7e1dd; background:#fffefd; }
+.care-day { min-height:88px; padding:10px; border:0; border-right:1px solid #e7e1dd; border-bottom:1px solid #e7e1dd; background:#fffefd; text-align:left; }
+.care-day:hover { background:#faf7f5; }
 .care-day.muted { background:#fcfaf8; }
 .care-day.today .care-date { display:grid; place-items:center; width:23px; height:23px; border-radius:50%; background:#e2eff2; }
 .care-day.period { background:#fdf3f6; }

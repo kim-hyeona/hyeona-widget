@@ -34,7 +34,7 @@ final class NotificationKeeper {
             try { postSchedule(app, token); }
             catch (Exception e) { post(app, SCHEDULE_ID, "오늘 일정", "Notion 캘린더 연결을 확인해 주세요"); }
             try { postTodo(app, token); }
-            catch (Exception e) { post(app, TODO_ID, "오늘 할 일", "Notion 루틴 연결을 확인해 주세요"); }
+            catch (Exception e) { post(app, TODO_ID, "오늘 할 일", "Notion 오늘 할 일 연결을 확인해 주세요"); }
         });
     }
 
@@ -54,7 +54,7 @@ final class NotificationKeeper {
     }
 
     private static void postTodo(Context app, String token) throws Exception {
-        List<NotionClient.Item> items = NotionClient.query(token, "routine");
+        List<NotionClient.Item> items = NotionClient.query(token, "todo");
         int done = 0; StringBuilder names = new StringBuilder();
         for (NotionClient.Item item : items) {
             if (item.done) done++;

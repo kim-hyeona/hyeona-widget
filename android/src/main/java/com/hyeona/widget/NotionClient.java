@@ -22,7 +22,7 @@ final class NotionClient{
   JSONObject body=new JSONObject().put("properties",p);if(x.id.isEmpty())body.put("parent",new JSONObject().put("database_id",s.id));
   req(token,x.id.isEmpty()?"POST":"PATCH",x.id.isEmpty()?"pages":"pages/"+x.id,body);
  }
- private static JSONArray rich(String value){return new JSONArray().put(new JSONObject().put("text",new JSONObject().put("content",value.substring(0,Math.min(1800,value.length())))));}
+ private static JSONArray rich(String value)throws Exception{return new JSONArray().put(new JSONObject().put("text",new JSONObject().put("content",value.substring(0,Math.min(1800,value.length())))));}
  private static final class DbShape{String id="",title="",date="",note="";}
  private static DbShape careDb(String token)throws Exception{
   String id=CARE;JSONObject props=req(token,"GET","databases/"+id,null).getJSONObject("properties");DbShape s=new DbShape();s.id=id;

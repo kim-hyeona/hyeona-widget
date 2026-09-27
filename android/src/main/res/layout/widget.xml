@@ -51,10 +51,19 @@
         <TextView android:id="@+id/packaging_summary" android:layout_width="0dp" android:layout_height="28dp" android:layout_weight="1" android:layout_marginLeft="3dp" android:background="@drawable/pill_mint" android:gravity="center" android:maxLines="1" android:ellipsize="end" android:text="◇ PACKAGING" android:textSize="10sp" android:textColor="#678C87" />
     </LinearLayout>
     <TextView android:layout_width="match_parent" android:layout_height="1dp" android:background="#80CDDEE2" />
-    <LinearLayout android:layout_width="match_parent" android:layout_height="76dp" android:orientation="horizontal" android:gravity="center_vertical">
-        <TextView android:id="@+id/care_prev" android:layout_width="22dp" android:layout_height="match_parent" android:gravity="center" android:text="‹" android:textSize="20sp" android:textColor="#78979D" />
-        <TextView android:id="@+id/care1" style="@style/CareDay" /><TextView android:id="@+id/care2" style="@style/CareDay" /><TextView android:id="@+id/care3" style="@style/CareDay" /><TextView android:id="@+id/care4" style="@style/CareDay" /><TextView android:id="@+id/care5" style="@style/CareDay" /><TextView android:id="@+id/care6" style="@style/CareDay" /><TextView android:id="@+id/care7" style="@style/CareDay" />
-        <TextView android:id="@+id/care_next" android:layout_width="22dp" android:layout_height="match_parent" android:gravity="center" android:text="›" android:textSize="20sp" android:textColor="#78979D" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="154dp" android:orientation="vertical">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="20dp" android:orientation="horizontal">
+            <TextView android:id="@+id/care_prev" android:layout_width="30dp" android:layout_height="match_parent" android:gravity="center" android:text="‹" android:textSize="18sp" android:textColor="#78979D" />
+            <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" />
+            <TextView android:id="@+id/care_next" android:layout_width="30dp" android:layout_height="match_parent" android:gravity="center" android:text="›" android:textSize="18sp" android:textColor="#78979D" />
+        </LinearLayout>
+        <TextView android:id="@+id/care1" style="@style/CareDay" />
+        <TextView android:id="@+id/care2" style="@style/CareDay" />
+        <TextView android:id="@+id/care3" style="@style/CareDay" />
+        <TextView android:id="@+id/care4" style="@style/CareDay" />
+        <TextView android:id="@+id/care5" style="@style/CareDay" />
+        <TextView android:id="@+id/care6" style="@style/CareDay" />
+        <TextView android:id="@+id/care7" style="@style/CareDay" />
     </LinearLayout>
-    <TextView android:id="@+id/brain_summary" android:layout_width="match_parent" android:layout_height="104dp" android:layout_marginTop="6dp" android:background="@drawable/brain_panel_bg" android:gravity="top|left" android:paddingLeft="12dp" android:paddingTop="9dp" android:paddingRight="12dp" android:paddingBottom="9dp" android:maxLines="6" android:ellipsize="end" android:text="BRAIN DUMP\n· 비어 있어요" android:textSize="10sp" android:lineSpacingExtra="3dp" android:textColor="#7E7775" />
+    <TextView android:id="@+id/brain_summary" android:layout_width="match_parent" android:layout_height="104dp" android:layout_marginTop="6dp" android:background="@drawable/brain_panel_bg" android:gravity="top|left" android:paddingLeft="12dp" android:paddingTop="9dp" android:paddingRight="12dp" android:paddingBottom="9dp" android:maxLines="8" android:ellipsize="end" android:text="BRAIN DUMP\n· 비어 있어요" android:textSize="9sp" android:lineSpacingExtra="2dp" android:textColor="#7E7775" />
 </LinearLayout>

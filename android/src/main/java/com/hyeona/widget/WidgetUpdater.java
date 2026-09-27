@@ -204,17 +204,21 @@ public final class WidgetUpdater {
         return day;
     }
 
-    private static String mealDetails(NotionClient.CareEntry entry) {
+    private static String compactMeal(NotionClient.CareEntry entry) {
         String[][] fields = {
-                {"아침", entry.breakfast}, {"점심", entry.lunch},
-                {"저녁", entry.dinner}, {"간식", entry.snack}, {"메모", entry.note}
+                {"아", entry.breakfast}, {"점", entry.lunch},
+                {"저", entry.dinner}, {"간", entry.snack}
         };
         StringBuilder out = new StringBuilder();
+        int shown = 0;
         for (String[] field : fields) {
             String clean = field[1] == null ? "" : field[1].trim().replaceAll("\\s+", " ");
             if (clean.isEmpty()) continue;
-            if (out.length() > 0) out.append("   ·   ");
-            out.append(field[0]).append(" · ").append(clean);
+            if (clean.length() > 7) clean = clean.substring(0, 7) + "…";
+            if (out.length() > 0) out.append("\n");
+            out.append(field[0]).append(" ").append(clean);
+            shown++;
+            if (shown == 2) break;
         }
         return out.toString();
     }
@@ -230,10 +234,10 @@ public final class WidgetUpdater {
             String icon = careIcon(day.getTime(), start, end, cycle);
             String date = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(day.getTime());
             NotionClient.CareEntry entry = d.care.get(date);
-            String meals = entry == null ? "" : mealDetails(entry);
-            String firstLine = names[i] + " " + day.get(Calendar.DAY_OF_MONTH) + (icon.isEmpty() ? "" : " " + icon) + "   ";
+            String meals = entry == null ? "" : compactMeal(entry);
+            String firstLine = day.get(Calendar.DAY_OF_MONTH) + " " + names[i] + (icon.isEmpty() ? "" : " " + icon);
             String detail = d.careError.isEmpty() ? (meals.isEmpty() ? "식단 입력" : meals) : d.careError;
-            v.setTextViewText(ids[i], firstLine + detail);
+            v.setTextViewText(ids[i], firstLine + "\n" + detail);
             Intent care = new Intent(c, MainActivity.class).setData(android.net.Uri.parse("hyeona://care/" + date)).putExtra("section", "care").putExtra("care_date", date);
             v.setOnClickPendingIntent(ids[i], PendingIntent.getActivity(c, 4000 + i, care, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
             day.add(Calendar.DAY_OF_MONTH, 1);

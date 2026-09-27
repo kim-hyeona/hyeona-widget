@@ -65,12 +65,15 @@ public final class WidgetUpdater {
                     for (NotionClient.Item item : NotionClient.query(token, "routine"))
                         d.routines.add(new Event(item.id, item.title.isEmpty() ? "제목 없음" : item.title, "", item.done));
                 } catch (Exception e) { d.routineError = "루틴 불러오기 실패 · 눌러 확인"; }
-                try { d.brain = fetchBrain(token); } catch (Exception ignored) { }
+                d.brain = c.getSharedPreferences("prefs", Context.MODE_PRIVATE).getString("brainDraft", "");
+                try { String remoteBrain = NotionClient.loadBrain(token); if (remoteBrain != null && !remoteBrain.trim().isEmpty()) d.brain = remoteBrain; } catch (Exception ignored) { }
+                d.care = loadLocalCareWeek(c, d.careStart);
                 try {
                     Calendar end = (Calendar) d.careStart.clone(); end.add(Calendar.DAY_OF_MONTH, 7);
                     SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
-                    d.care = NotionClient.loadCareWeek(token, f.format(d.careStart.getTime()), f.format(end.getTime()));
-                } catch (Exception e) { d.careError = "불러오기 실패"; }
+                    Map<String, NotionClient.CareEntry> remoteCare = NotionClient.loadCareWeek(token, f.format(d.careStart.getTime()), f.format(end.getTime()));
+                    for (Map.Entry<String, NotionClient.CareEntry> e : remoteCare.entrySet()) { d.care.put(e.getKey(), e.getValue()); saveLocalCare(c, e.getValue()); }
+                } catch (Exception ignored) { }
             }
             for (int id : ids) m.updateAppWidget(id, views(c, d, displayMonth));
         });
@@ -147,7 +150,8 @@ public final class WidgetUpdater {
         setSectionLink(c, v, R.id.routine_list, "routine", 12);
         v.setTextViewText(R.id.wish_summary, "♡ WISH · " + d.wishes);
         v.setTextViewText(R.id.money_summary, "◇ BLEEDING · " + (d.money.isEmpty() ? "0" : d.money));
-        v.setTextViewText(R.id.brain_summary, "BRAIN DUMP\n" + (d.brain.trim().isEmpty() ? "· 비어 있어요" : d.brain.trim()));
+        String brainText = d.brain == null ? "" : d.brain.trim(); if (brainText.length() > 120) brainText = brainText.substring(0, 120) + "…";
+        v.setTextViewText(R.id.brain_summary, "BRAIN DUMP\n" + (brainText.isEmpty() ? "· 비어 있어요" : brainText));
         v.setTextViewText(R.id.packaging_summary, "◇ PACKAGING");
         setSectionLink(c, v, R.id.wish_summary, "wishlist", 20);
         setSectionLink(c, v, R.id.money_summary, "bleeding", 21);
@@ -202,6 +206,16 @@ public final class WidgetUpdater {
         int mondayDelta = day.get(Calendar.DAY_OF_WEEK) == Calendar.SUNDAY ? -6 : Calendar.MONDAY - day.get(Calendar.DAY_OF_WEEK);
         day.add(Calendar.DAY_OF_MONTH, mondayDelta + offset * 7);
         return day;
+    }
+
+    private static Map<String, NotionClient.CareEntry> loadLocalCareWeek(Context c, Calendar start) {
+        Map<String, NotionClient.CareEntry> out = new HashMap<>(); Calendar day = (Calendar) start.clone(); SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
+        android.content.SharedPreferences p = c.getSharedPreferences("prefs", Context.MODE_PRIVATE);
+        for (int i = 0; i < 7; i++) { String date = f.format(day.getTime()); NotionClient.CareEntry x = new NotionClient.CareEntry(); x.date=date; x.breakfast=p.getString("care_"+date+"_breakfast",""); x.lunch=p.getString("care_"+date+"_lunch",""); x.dinner=p.getString("care_"+date+"_dinner",""); x.snack=p.getString("care_"+date+"_snack",""); x.note=p.getString("care_"+date+"_note",""); if (!x.breakfast.trim().isEmpty()||!x.lunch.trim().isEmpty()||!x.dinner.trim().isEmpty()||!x.snack.trim().isEmpty()||!x.note.trim().isEmpty()) out.put(date,x); day.add(Calendar.DAY_OF_MONTH,1); }
+        return out;
+    }
+    private static void saveLocalCare(Context c, NotionClient.CareEntry x) {
+        c.getSharedPreferences("prefs", Context.MODE_PRIVATE).edit().putString("care_"+x.date+"_breakfast",x.breakfast).putString("care_"+x.date+"_lunch",x.lunch).putString("care_"+x.date+"_dinner",x.dinner).putString("care_"+x.date+"_snack",x.snack).putString("care_"+x.date+"_note",x.note).apply();
     }
 
     private static String compactMeal(NotionClient.CareEntry entry) {

@@ -22,19 +22,46 @@ public class MainActivity extends Activity {
  private interface Work{void run()throws Exception;}private void work(String ok,Work w){loading.setVisibility(View.VISIBLE);Executors.newSingleThreadExecutor().execute(()->{try{w.run();runOnUiThread(()->{toast(ok);load();WidgetUpdater.updateAll(this);});}catch(Exception e){runOnUiThread(()->error(e));}});}
  private void brain(){list.removeAllViews();list.addView(text("BRAIN DUMP",23));TextView h=text("입력 내용은 즉시 이 기기에 보관되고, 저장 버튼을 누르면 노션에도 반영돼요.",12);h.setTextColor(muted);pad(h,0,3,0,12);list.addView(h);EditText body=field("아무거나 그냥 적어",getSharedPreferences("prefs",MODE_PRIVATE).getString("brainDraft",""));body.setGravity(Gravity.TOP);body.setMinLines(12);body.setBackgroundColor(Color.WHITE);pad(body,14,14,14,14);list.addView(body,new LinearLayout.LayoutParams(-1,dp(280)));body.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int a,int b,int c){}public void onTextChanged(CharSequence s,int a,int b,int c){getSharedPreferences("prefs",MODE_PRIVATE).edit().putString("brainDraft",s.toString()).apply();}public void afterTextChanged(android.text.Editable e){}});Button save=new Button(this);save.setText("노션에 저장");save.setOnClickListener(v->work("브레인덤프를 저장했어요",()->NotionClient.saveBrain(token,body.getText().toString())));list.addView(save,new LinearLayout.LayoutParams(-1,dp(52)));Executors.newSingleThreadExecutor().execute(()->{try{String remote=NotionClient.loadBrain(token);runOnUiThread(()->{if(body.getText().length()==0)body.setText(remote);});}catch(Exception e){runOnUiThread(()->toast("노션 불러오기 실패 · 기기 보관본은 유지돼요"));}});}
  private void care(){
-  list.removeAllViews();String picked=getIntent().getStringExtra("care_date");if(picked==null||picked.isEmpty())picked=new SimpleDateFormat("yyyy-MM-dd",Locale.US).format(new Date());final String date=picked;
-  LinearLayout head=new LinearLayout(this);head.setGravity(Gravity.CENTER_VERTICAL);head.addView(text("PRIVATE WEEKLY",23),new LinearLayout.LayoutParams(0,-2,1));Button cycleButton=new Button(this);cycleButton.setText("주기 설정");cycleButton.setAllCaps(false);cycleButton.setOnClickListener(v->cycleDialog());head.addView(cycleButton,new LinearLayout.LayoutParams(dp(100),dp(44)));list.addView(head);
-  String phase=carePhase(date);TextView h=text(date+(phase.isEmpty()?"":"  "+phase)+"\n식단과 관리 메모는 life is bitch 안의 식단 / 관리 캘린더에 저장돼요.",12);h.setTextColor(muted);pad(h,0,3,0,14);list.addView(h);
-  EditText breakfast=field("아침","");breakfast.setMinLines(2);breakfast.setGravity(Gravity.TOP);list.addView(breakfast,new LinearLayout.LayoutParams(-1,dp(82)));
-  EditText lunch=field("점심","");lunch.setMinLines(2);lunch.setGravity(Gravity.TOP);list.addView(lunch,new LinearLayout.LayoutParams(-1,dp(82)));
-  EditText dinner=field("저녁","");dinner.setMinLines(2);dinner.setGravity(Gravity.TOP);list.addView(dinner,new LinearLayout.LayoutParams(-1,dp(82)));
-  EditText snack=field("간식","");snack.setMinLines(2);snack.setGravity(Gravity.TOP);list.addView(snack,new LinearLayout.LayoutParams(-1,dp(82)));
-  EditText note=field("관리 메모","");note.setMinLines(4);note.setGravity(Gravity.TOP);list.addView(note,new LinearLayout.LayoutParams(-1,dp(130)));
-  final NotionClient.CareEntry[] current={new NotionClient.CareEntry()};current[0].date=date;
-  Button save=new Button(this);save.setText("노션 식단 목록에 저장");save.setEnabled(false);save.setOnClickListener(v->{current[0].date=date;current[0].breakfast=breakfast.getText().toString();current[0].lunch=lunch.getText().toString();current[0].dinner=dinner.getText().toString();current[0].snack=snack.getText().toString();current[0].note=note.getText().toString();work("위클리를 노션에 저장했어요",()->NotionClient.saveCare(token,current[0],phase));});list.addView(save,new LinearLayout.LayoutParams(-1,dp(52)));
-  loading.setVisibility(View.VISIBLE);Executors.newSingleThreadExecutor().execute(()->{try{NotionClient.CareEntry x=NotionClient.loadCare(token,date);runOnUiThread(()->{current[0]=x;breakfast.setText(x.breakfast);lunch.setText(x.lunch);dinner.setText(x.dinner);snack.setText(x.snack);note.setText(x.note);save.setEnabled(true);loading.setVisibility(View.GONE);});}catch(Exception e){runOnUiThread(()->{loading.setVisibility(View.GONE);error(e);});}});
+  list.removeAllViews();
+  String picked=getIntent().getStringExtra("care_date");if(picked==null||picked.isEmpty())picked=new SimpleDateFormat("yyyy-MM-dd",Locale.US).format(new Date());final String date=picked;
+
+  list.addView(text("PRIVATE WEEKLY",23));
+  TextView cycleHint=text("생리 주기",13);cycleHint.setTextColor(muted);pad(cycleHint,0,8,0,3);list.addView(cycleHint);
+  String sv=getSharedPreferences("prefs",MODE_PRIVATE).getString("period_start","");
+  String ev=getSharedPreferences("prefs",MODE_PRIVATE).getString("period_end","");
+  int cv=getSharedPreferences("prefs",MODE_PRIVATE).getInt("cycle_length",28);
+  EditText periodStart=field("생리 시작일 (2026-09-01)",sv);
+  EditText periodEnd=field("생리 종료일 (2026-09-05)",ev);
+  EditText cycle=field("평균 주기",String.valueOf(cv));cycle.setInputType(InputType.TYPE_CLASS_NUMBER);
+  list.addView(periodStart);list.addView(periodEnd);list.addView(cycle);
+  Button cycleSave=new Button(this);cycleSave.setText("생리 주기 저장");
+  cycleSave.setOnClickListener(v->{int days;try{days=Integer.parseInt(cycle.getText().toString().trim());}catch(Exception e){days=28;}days=Math.max(21,Math.min(45,days));getSharedPreferences("prefs",MODE_PRIVATE).edit().putString("period_start",periodStart.getText().toString().trim()).putString("period_end",periodEnd.getText().toString().trim()).putInt("cycle_length",days).putInt("care_week_offset",0).apply();WidgetUpdater.updateAll(this);toast("생리 주기를 저장했어요");});
+  list.addView(cycleSave,new LinearLayout.LayoutParams(-1,dp(48)));
+
+  String phase=carePhase(date);TextView h=text(date+(phase.isEmpty()?"":"  "+phase)+"\n식단은 기기에 먼저 저장되고 노션에도 동기화돼요.",12);h.setTextColor(muted);pad(h,0,12,0,8);list.addView(h);
+  EditText breakfast=field("아침","");breakfast.setMinLines(2);breakfast.setGravity(Gravity.TOP);list.addView(breakfast,new LinearLayout.LayoutParams(-1,dp(76)));
+  EditText lunch=field("점심","");lunch.setMinLines(2);lunch.setGravity(Gravity.TOP);list.addView(lunch,new LinearLayout.LayoutParams(-1,dp(76)));
+  EditText dinner=field("저녁","");dinner.setMinLines(2);dinner.setGravity(Gravity.TOP);list.addView(dinner,new LinearLayout.LayoutParams(-1,dp(76)));
+  EditText snack=field("간식","");snack.setMinLines(2);snack.setGravity(Gravity.TOP);list.addView(snack,new LinearLayout.LayoutParams(-1,dp(76)));
+  EditText note=field("관리 메모","");note.setMinLines(3);note.setGravity(Gravity.TOP);list.addView(note,new LinearLayout.LayoutParams(-1,dp(108)));
+
+  final NotionClient.CareEntry[] current={loadLocalCare(date)};
+  breakfast.setText(current[0].breakfast);lunch.setText(current[0].lunch);dinner.setText(current[0].dinner);snack.setText(current[0].snack);note.setText(current[0].note);
+
+  Button save=new Button(this);save.setText("식단 저장");
+  save.setOnClickListener(v->{
+   current[0].date=date;current[0].breakfast=breakfast.getText().toString();current[0].lunch=lunch.getText().toString();current[0].dinner=dinner.getText().toString();current[0].snack=snack.getText().toString();current[0].note=note.getText().toString();
+   saveLocalCare(current[0]);WidgetUpdater.updateAll(this);toast("기기에 저장했어요");
+   Executors.newSingleThreadExecutor().execute(()->{try{NotionClient.saveCare(token,current[0],carePhase(date));runOnUiThread(()->toast("노션에도 동기화했어요"));}catch(Exception e){runOnUiThread(()->toast("노션 동기화 실패 · 기기 저장본은 유지돼요"));}});
+  });
+  list.addView(save,new LinearLayout.LayoutParams(-1,dp(52)));
+
+  loading.setVisibility(View.VISIBLE);
+  Executors.newSingleThreadExecutor().execute(()->{try{NotionClient.CareEntry x=NotionClient.loadCare(token,date);runOnUiThread(()->{if(hasCareContent(x)){current[0]=x;saveLocalCare(x);breakfast.setText(x.breakfast);lunch.setText(x.lunch);dinner.setText(x.dinner);snack.setText(x.snack);note.setText(x.note);WidgetUpdater.updateAll(this);}loading.setVisibility(View.GONE);});}catch(Exception e){runOnUiThread(()->loading.setVisibility(View.GONE));}});
  }
- private void cycleDialog(){String sv=getSharedPreferences("prefs",MODE_PRIVATE).getString("period_start","");String ev=getSharedPreferences("prefs",MODE_PRIVATE).getString("period_end","");int cv=getSharedPreferences("prefs",MODE_PRIVATE).getInt("cycle_length",28);LinearLayout f=new LinearLayout(this);f.setOrientation(LinearLayout.VERTICAL);pad(f,20,4,20,0);EditText start=field("생리 시작일 (2026-09-01)",sv),end=field("생리 종료일 (2026-09-05)",ev),cycle=field("평균 주기",String.valueOf(cv));cycle.setInputType(InputType.TYPE_CLASS_NUMBER);f.addView(start);f.addView(end);f.addView(cycle);new AlertDialog.Builder(this).setTitle("🫧 · 💊 · ✦ · 🍦").setView(f).setNegativeButton("취소",null).setPositiveButton("저장",(d,w)->{int days;try{days=Integer.parseInt(cycle.getText().toString().trim());}catch(Exception e){days=28;}days=Math.max(21,Math.min(45,days));getSharedPreferences("prefs",MODE_PRIVATE).edit().putString("period_start",start.getText().toString().trim()).putString("period_end",end.getText().toString().trim()).putInt("cycle_length",days).putInt("care_week_offset",0).apply();WidgetUpdater.updateAll(this);care();}).show();}
+ private NotionClient.CareEntry loadLocalCare(String date){android.content.SharedPreferences p=getSharedPreferences("prefs",MODE_PRIVATE);NotionClient.CareEntry x=new NotionClient.CareEntry();x.date=date;x.breakfast=p.getString("care_"+date+"_breakfast","");x.lunch=p.getString("care_"+date+"_lunch","");x.dinner=p.getString("care_"+date+"_dinner","");x.snack=p.getString("care_"+date+"_snack","");x.note=p.getString("care_"+date+"_note","");return x;}
+ private void saveLocalCare(NotionClient.CareEntry x){getSharedPreferences("prefs",MODE_PRIVATE).edit().putString("care_"+x.date+"_breakfast",x.breakfast).putString("care_"+x.date+"_lunch",x.lunch).putString("care_"+x.date+"_dinner",x.dinner).putString("care_"+x.date+"_snack",x.snack).putString("care_"+x.date+"_note",x.note).apply();}
+ private boolean hasCareContent(NotionClient.CareEntry x){return x!=null&&(!x.id.isEmpty()||!x.breakfast.trim().isEmpty()||!x.lunch.trim().isEmpty()||!x.dinner.trim().isEmpty()||!x.snack.trim().isEmpty()||!x.note.trim().isEmpty());}
  private String carePhase(String value){try{SimpleDateFormat f=new SimpleDateFormat("yyyy-MM-dd",Locale.US);f.setLenient(false);Date day=f.parse(value),start=f.parse(getSharedPreferences("prefs",MODE_PRIVATE).getString("period_start","")),end=f.parse(getSharedPreferences("prefs",MODE_PRIVATE).getString("period_end",""));if(day==null||start==null||end==null)return"";int cycle=getSharedPreferences("prefs",MODE_PRIVATE).getInt("cycle_length",28);long unit=86400000L;int n=(int)(((day.getTime()-start.getTime())/unit%cycle+cycle)%cycle),period=Math.max(1,(int)((end.getTime()-start.getTime())/unit)+1),ovulation=cycle-14;if(n<period)return"🫧";if(n<ovulation)return"💊";if(n==ovulation)return"✦";return"🍦";}catch(Exception e){return"";}}
  private void tokenDialog(){EditText i=field("Notion 내부 통합 시크릿",token);i.setInputType(129);new AlertDialog.Builder(this).setTitle("연결 설정").setView(i).setNegativeButton("취소",null).setNeutralButton("토큰 지우기",(d,w)->{getSharedPreferences("prefs",MODE_PRIVATE).edit().clear().apply();token="";showToken();}).setPositiveButton("저장",(d,w)->{token=i.getText().toString().trim();getSharedPreferences("prefs",MODE_PRIVATE).edit().putString("token",token).apply();load();}).show();}
  private void error(Exception e){loading.setVisibility(View.GONE);toast("오류: "+(e.getMessage()==null?"알 수 없는 오류":e.getMessage()));}private void toast(String s){Toast.makeText(this,s,Toast.LENGTH_LONG).show();}

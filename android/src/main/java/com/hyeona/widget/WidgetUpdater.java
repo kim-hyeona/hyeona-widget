@@ -147,7 +147,7 @@ public final class WidgetUpdater {
         setSectionLink(c, v, R.id.routine_list, "routine", 12);
         v.setTextViewText(R.id.wish_summary, "♡ WISH · " + d.wishes);
         v.setTextViewText(R.id.money_summary, "◇ BLEEDING · " + (d.money.isEmpty() ? "0" : d.money));
-        v.setTextViewText(R.id.brain_summary, "⌁ BRAIN DUMP · " + (d.brain.isEmpty() ? "…" : d.brain));
+        v.setTextViewText(R.id.brain_summary, "BRAIN DUMP\n" + (d.brain.trim().isEmpty() ? "· 비어 있어요" : d.brain.trim()));
         v.setTextViewText(R.id.packaging_summary, "◇ PACKAGING");
         setSectionLink(c, v, R.id.wish_summary, "wishlist", 20);
         setSectionLink(c, v, R.id.money_summary, "bleeding", 21);
@@ -204,10 +204,19 @@ public final class WidgetUpdater {
         return day;
     }
 
-    private static String mealPreview(String label, String value) {
-        String clean = value.trim().replaceAll("\\s+", " ");
-        if (clean.isEmpty()) return "";
-        return "\n" + label + " " + (clean.length() > 12 ? clean.substring(0, 12) + "…" : clean);
+    private static String compactMealPreview(NotionClient.CareEntry entry) {
+        String[] values = {entry.breakfast, entry.lunch, entry.dinner, entry.snack};
+        StringBuilder out = new StringBuilder();
+        for (String value : values) {
+            String clean = value == null ? "" : value.trim().replaceAll("\\s+", " ");
+            if (clean.isEmpty()) continue;
+            if (out.length() > 0) out.append(" · ");
+            out.append(clean);
+            if (out.length() >= 14) break;
+        }
+        if (out.length() == 0 && entry.note != null) out.append(entry.note.trim().replaceAll("\\s+", " "));
+        if (out.length() > 14) return out.substring(0, 14) + "…";
+        return out.toString();
     }
 
     private static void bindCareWeek(Context c, RemoteViews v, Dashboard d) {
@@ -221,8 +230,10 @@ public final class WidgetUpdater {
             String icon = careIcon(day.getTime(), start, end, cycle);
             String date = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(day.getTime());
             NotionClient.CareEntry entry = d.care.get(date);
-            String meals = entry == null ? "" : mealPreview("아침", entry.breakfast) + mealPreview("점심", entry.lunch) + mealPreview("저녁", entry.dinner) + mealPreview("간식", entry.snack) + mealPreview("메모", entry.note);
-            v.setTextViewText(ids[i], names[i] + " " + day.get(Calendar.DAY_OF_MONTH) + (icon.isEmpty() ? "" : "\n" + icon) + (d.careError.isEmpty() ? (meals.isEmpty() ? "\n식단 입력" : meals) : "\n" + d.careError));
+            String meals = entry == null ? "" : compactMealPreview(entry);
+            String firstLine = names[i] + " " + day.get(Calendar.DAY_OF_MONTH) + (icon.isEmpty() ? "" : " " + icon);
+            String detail = d.careError.isEmpty() ? (meals.isEmpty() ? "식단 입력" : meals) : d.careError;
+            v.setTextViewText(ids[i], firstLine + "\n" + detail);
             Intent care = new Intent(c, MainActivity.class).setData(android.net.Uri.parse("hyeona://care/" + date)).putExtra("section", "care").putExtra("care_date", date);
             v.setOnClickPendingIntent(ids[i], PendingIntent.getActivity(c, 4000 + i, care, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
             day.add(Calendar.DAY_OF_MONTH, 1);

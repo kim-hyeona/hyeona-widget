@@ -11,16 +11,25 @@ final class NotionClient{
  static String loadBrain(String t)throws Exception{return text(req(t,"GET","pages/"+BRAIN,null).getJSONObject("properties").optJSONObject("내용"));}static void saveBrain(String t,String v)throws Exception{String s=v.substring(0,Math.min(1900,v.length()));JSONObject r=new JSONObject().put("rich_text",new JSONArray().put(new JSONObject().put("text",new JSONObject().put("content",s))));req(t,"PATCH","pages/"+BRAIN,new JSONObject().put("properties",new JSONObject().put("내용",r)));}
  static CareEntry loadCare(String token,String date)throws Exception{
   DbShape s=careDb(token); CareEntry out=new CareEntry(); out.date=date;
-  JSONObject body=new JSONObject().put("page_size",10).put("filter",new JSONObject().put("property",s.date).put("date",new JSONObject().put("equals",date)));
+  JSONObject body=new JSONObject().put("page_size",10).put("sorts",new JSONArray().put(new JSONObject().put("timestamp","last_edited_time").put("direction","descending"))).put("filter",new JSONObject().put("property",s.date).put("date",new JSONObject().put("equals",date)));
   JSONArray a=req(token,"POST","databases/"+s.id+"/query",body).getJSONArray("results"); if(a.length()==0)return out;
   JSONObject page=a.getJSONObject(0),p=page.getJSONObject("properties");out.id=page.optString("id");out.breakfast=text(p.optJSONObject("아침"));out.lunch=text(p.optJSONObject("점심"));out.dinner=text(p.optJSONObject("저녁"));out.snack=text(p.optJSONObject("간식"));out.note=text(p.optJSONObject("관리 메모"));return out;
  }
  static void saveCare(String token,CareEntry x,String phase)throws Exception{
   DbShape s=careDb(token);JSONObject p=new JSONObject();
   p.put(s.title,new JSONObject().put("title",rich(x.date+" 식단"))).put(s.date,new JSONObject().put("date",new JSONObject().put("start",x.date)));
-  p.put("아침",new JSONObject().put("rich_text",rich(x.breakfast.trim()))).put("점심",new JSONObject().put("rich_text",rich(x.lunch.trim()))).put("저녁",new JSONObject().put("rich_text",rich(x.dinner.trim()))).put("간식",new JSONObject().put("rich_text",rich(x.snack.trim()))).put("관리 메모",new JSONObject().put("rich_text",rich((phase.isEmpty()?"":phase+" · ")+x.note.trim())));
+  p.put("아침",new JSONObject().put("rich_text",rich(x.breakfast.trim()))).put("점심",new JSONObject().put("rich_text",rich(x.lunch.trim()))).put("저녁",new JSONObject().put("rich_text",rich(x.dinner.trim()))).put("간식",new JSONObject().put("rich_text",rich(x.snack.trim()))).put("관리 메모",new JSONObject().put("rich_text",rich(x.note.trim())));
   JSONObject body=new JSONObject().put("properties",p);if(x.id.isEmpty())body.put("parent",new JSONObject().put("database_id",s.id));
-  req(token,x.id.isEmpty()?"POST":"PATCH",x.id.isEmpty()?"pages":"pages/"+x.id,body);
+  JSONObject saved=req(token,x.id.isEmpty()?"POST":"PATCH",x.id.isEmpty()?"pages":"pages/"+x.id,body);x.id=saved.getString("id");
+ }
+ static Map<String,CareEntry> loadCareWeek(String token,String start,String end)throws Exception{
+  DbShape s=careDb(token);Map<String,CareEntry> entries=new HashMap<>();
+  JSONObject body=new JSONObject().put("page_size",100).put("sorts",new JSONArray().put(new JSONObject().put("timestamp","last_edited_time").put("direction","descending"))).put("filter",new JSONObject().put("and",new JSONArray().put(new JSONObject().put("property",s.date).put("date",new JSONObject().put("on_or_after",start))).put(new JSONObject().put("property",s.date).put("date",new JSONObject().put("before",end)))));
+  boolean more;do{JSONObject result=req(token,"POST","databases/"+s.id+"/query",body);JSONArray pages=result.getJSONArray("results");
+   for(int i=0;i<pages.length();i++){JSONObject page=pages.getJSONObject(i),p=page.getJSONObject("properties"),date=p.getJSONObject(s.date).optJSONObject("date");if(date==null)continue;String key=date.optString("start");if(key.length()<10)continue;key=key.substring(0,10);if(entries.containsKey(key))continue;
+    CareEntry x=new CareEntry();x.id=page.getString("id");x.date=key;x.breakfast=text(p.optJSONObject("아침"));x.lunch=text(p.optJSONObject("점심"));x.dinner=text(p.optJSONObject("저녁"));x.snack=text(p.optJSONObject("간식"));x.note=text(p.optJSONObject("관리 메모"));entries.put(key,x);
+   }more=result.optBoolean("has_more");if(more)body.put("start_cursor",result.getString("next_cursor"));
+  }while(more);return entries;
  }
  private static JSONArray rich(String value)throws Exception{return new JSONArray().put(new JSONObject().put("text",new JSONObject().put("content",value.substring(0,Math.min(1800,value.length())))));}
  private static final class DbShape{String id="",title="",date="",note="";}

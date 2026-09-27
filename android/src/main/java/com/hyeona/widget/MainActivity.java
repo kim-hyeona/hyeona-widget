@@ -3,6 +3,7 @@ package com.hyeona.widget;
 import android.app.Activity; import android.app.AlertDialog; import android.graphics.Color; import android.os.Bundle; import android.os.Build; import android.Manifest; import android.content.pm.PackageManager; import android.text.InputType; import android.view.Gravity; import android.view.View; import android.widget.*; import java.text.SimpleDateFormat; import java.util.*; import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity {
+ @Override protected void onNewIntent(android.content.Intent intent){super.onNewIntent(intent);setIntent(intent);String requested=intent.getStringExtra("section");if(requested!=null)section=requested;if(!token.isEmpty())showDashboard();}
  private final int ink=Color.rgb(40,55,59),muted=Color.rgb(107,140,145); private LinearLayout root,list; private ProgressBar loading; private String token="",section="calendar";
  @Override public void onCreate(Bundle s){super.onCreate(s);token=getSharedPreferences("prefs",MODE_PRIVATE).getString("token","");String requested=getIntent().getStringExtra("section");if(requested!=null&&!requested.isEmpty())section=requested;enablePinnedNotification();if(token.isEmpty())showToken();else showDashboard();}
  private void enablePinnedNotification(){if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},77);else NotificationKeeper.refresh(this);}

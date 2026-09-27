@@ -49,6 +49,7 @@ public final class WidgetUpdater {
             displayMonth.set(Calendar.DAY_OF_MONTH, 1);
             displayMonth.add(Calendar.MONTH, monthOffset);
             Dashboard d = new Dashboard();
+            d.careStart = careWeekStart(c);
             if (token.isEmpty()) {
                 d.error = "앱을 열어 Notion 토큰을 저장해 주세요";
             } else {
@@ -60,8 +61,16 @@ public final class WidgetUpdater {
                     for (NotionClient.Item item : NotionClient.query(token, "todo"))
                         d.todos.add(new Event(item.id, item.title, "", item.done));
                 } catch (Exception ignored) { }
-                try { d.routines = fetchSimple(token, ROUTINE_DB, "항목", true); } catch (Exception ignored) { }
+                try {
+                    for (NotionClient.Item item : NotionClient.query(token, "routine"))
+                        d.routines.add(new Event(item.id, item.title.isEmpty() ? "제목 없음" : item.title, "", item.done));
+                } catch (Exception e) { d.routineError = "루틴 불러오기 실패 · 눌러 확인"; }
                 try { d.brain = fetchBrain(token); } catch (Exception ignored) { }
+                try {
+                    Calendar end = (Calendar) d.careStart.clone(); end.add(Calendar.DAY_OF_MONTH, 7);
+                    SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
+                    d.care = NotionClient.loadCareWeek(token, f.format(d.careStart.getTime()), f.format(end.getTime()));
+                } catch (Exception e) { d.careError = "불러오기 실패"; }
             }
             for (int id : ids) m.updateAppWidget(id, views(c, d, displayMonth));
         });
@@ -132,6 +141,7 @@ public final class WidgetUpdater {
         bindCheckList(c, v, R.id.today_list, today, 100);
         bindTextList(c, v, R.id.memo_list, d.memos, "메모가 없어요");
         bindCheckList(c, v, R.id.routine_list, d.routines, 200);
+        if (!d.routineError.isEmpty()) bindTextList(c, v, R.id.routine_list, new ArrayList<>(), d.routineError);
         setSectionLink(c, v, R.id.today_list, "todo", 10);
         setSectionLink(c, v, R.id.memo_list, "memo", 11);
         setSectionLink(c, v, R.id.routine_list, "routine", 12);
@@ -143,7 +153,7 @@ public final class WidgetUpdater {
         setSectionLink(c, v, R.id.money_summary, "bleeding", 21);
         setSectionLink(c, v, R.id.brain_summary, "brain", 22);
         v.setOnClickPendingIntent(R.id.packaging_summary, PendingIntent.getActivity(c, 23, notion, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
-        bindCareWeek(c, v);
+        bindCareWeek(c, v, d);
         return v;
     }
 
@@ -186,11 +196,22 @@ public final class WidgetUpdater {
         v.setOnClickPendingIntent(viewId, PendingIntent.getActivity(c, requestCode, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
     }
 
-    private static void bindCareWeek(Context c, RemoteViews v) {
+    private static Calendar careWeekStart(Context c) {
         int offset = c.getSharedPreferences("prefs", Context.MODE_PRIVATE).getInt("care_week_offset", 0);
         Calendar day = Calendar.getInstance(); day.set(Calendar.HOUR_OF_DAY, 12);
         int mondayDelta = day.get(Calendar.DAY_OF_WEEK) == Calendar.SUNDAY ? -6 : Calendar.MONDAY - day.get(Calendar.DAY_OF_WEEK);
         day.add(Calendar.DAY_OF_MONTH, mondayDelta + offset * 7);
+        return day;
+    }
+
+    private static String mealPreview(String label, String value) {
+        String clean = value.trim().replaceAll("\\s+", " ");
+        if (clean.isEmpty()) return "";
+        return "\n" + label + " " + (clean.length() > 12 ? clean.substring(0, 12) + "…" : clean);
+    }
+
+    private static void bindCareWeek(Context c, RemoteViews v, Dashboard d) {
+        Calendar day = (Calendar) d.careStart.clone();
         int[] ids = {R.id.care1,R.id.care2,R.id.care3,R.id.care4,R.id.care5,R.id.care6,R.id.care7};
         String[] names = {"월","화","수","목","금","토","일"};
         String start = c.getSharedPreferences("prefs", Context.MODE_PRIVATE).getString("period_start", "");
@@ -198,10 +219,12 @@ public final class WidgetUpdater {
         int cycle = c.getSharedPreferences("prefs", Context.MODE_PRIVATE).getInt("cycle_length", 28);
         for (int i = 0; i < 7; i++) {
             String icon = careIcon(day.getTime(), start, end, cycle);
-            v.setTextViewText(ids[i], names[i] + "\n" + day.get(Calendar.DAY_OF_MONTH) + (icon.isEmpty() ? "" : "\n" + icon));
             String date = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(day.getTime());
-            Intent care = new Intent(c, MainActivity.class).putExtra("section", "care").putExtra("care_date", date);
-            v.setOnClickPendingIntent(ids[i], PendingIntent.getActivity(c, 4000 + offset * 10 + i, care, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
+            NotionClient.CareEntry entry = d.care.get(date);
+            String meals = entry == null ? "" : mealPreview("아침", entry.breakfast) + mealPreview("점심", entry.lunch) + mealPreview("저녁", entry.dinner) + mealPreview("간식", entry.snack) + mealPreview("메모", entry.note);
+            v.setTextViewText(ids[i], names[i] + " " + day.get(Calendar.DAY_OF_MONTH) + (icon.isEmpty() ? "" : "\n" + icon) + (d.careError.isEmpty() ? (meals.isEmpty() ? "\n식단 입력" : meals) : "\n" + d.careError));
+            Intent care = new Intent(c, MainActivity.class).setData(android.net.Uri.parse("hyeona://care/" + date)).putExtra("section", "care").putExtra("care_date", date);
+            v.setOnClickPendingIntent(ids[i], PendingIntent.getActivity(c, 4000 + i, care, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
             day.add(Calendar.DAY_OF_MONTH, 1);
         }
         Intent prev = new Intent(c, WidgetProvider.class).setAction(WidgetProvider.ACTION_PREV_CARE_WEEK);
@@ -332,6 +355,9 @@ public final class WidgetUpdater {
     }
 
     private static final class Dashboard {
+        Calendar careStart;
+        Map<String, NotionClient.CareEntry> care = new HashMap<>();
+        String careError = "", routineError = "";
         List<Event> events = new ArrayList<>(), todos = new ArrayList<>(), memos = new ArrayList<>(), routines = new ArrayList<>(); String error = "", money = "", brain = ""; int wishes = 0;
     }
     private static final class Event {

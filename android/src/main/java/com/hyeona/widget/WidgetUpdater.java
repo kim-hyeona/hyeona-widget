@@ -249,41 +249,26 @@ public final class WidgetUpdater {
 
     private static void bindCareWeek(Context c, RemoteViews v, Dashboard d) {
         Calendar day = (Calendar) d.careStart.clone();
-        int[] ids = {R.id.care1,R.id.care2,R.id.care3,R.id.care4,R.id.care5,R.id.care6,R.id.care7};
-        String[] names = {"월","화","수","목","금","토","일"};
-        String start = c.getSharedPreferences("prefs", Context.MODE_PRIVATE).getString("period_start", "");
-        String end = c.getSharedPreferences("prefs", Context.MODE_PRIVATE).getString("period_end", "");
-        int cycle = c.getSharedPreferences("prefs", Context.MODE_PRIVATE).getInt("cycle_length", 28);
-        int defaultDay = (Calendar.getInstance().get(Calendar.DAY_OF_WEEK) + 5) % 7;
-        int selected = Math.max(0, Math.min(6, c.getSharedPreferences("prefs", Context.MODE_PRIVATE).getInt("care_selected_day", defaultDay)));
-        for (int i = 0; i < 7; i++) {
-            String icon = careIcon(day.getTime(), start, end, cycle);
-            String date = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(day.getTime());
-            NotionClient.CareEntry entry = d.care.get(date);
-            String meals = entry == null ? "" : compactMeal(entry);
-            String firstLine = day.get(Calendar.DAY_OF_MONTH) + " " + names[i] + (icon.isEmpty() ? "" : " " + icon);
-            String detail = d.careError.isEmpty() ? (meals.isEmpty() ? "식단 입력" : meals) : d.careError;
-            v.setTextViewText(ids[i], names[i] + "\n" + day.get(Calendar.DAY_OF_MONTH));
-            v.setInt(ids[i], "setBackgroundColor", i == selected ? Color.rgb(211,234,236) : Color.TRANSPARENT);
-            v.setContentDescription(ids[i], date + " 식단 보기");
-            Intent select = new Intent(c, WidgetProvider.class).setAction(WidgetProvider.ACTION_SELECT_CARE).putExtra("day_index", i);
-            v.setOnClickPendingIntent(ids[i], PendingIntent.getBroadcast(c, 4100+i, select, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
-            Intent care = new Intent(c, MainActivity.class).setData(android.net.Uri.parse("hyeona://care/" + date)).putExtra("section", "care").putExtra("care_date", date);
-            if(i == selected) {
-                v.setTextViewText(R.id.care_title, (day.get(Calendar.MONTH)+1)+"/"+day.get(Calendar.DAY_OF_MONTH)+" 식단 · 눌러 수정");
-                int[] mealIds={R.id.meal_breakfast,R.id.meal_lunch,R.id.meal_dinner,R.id.meal_snack};
-                String[] labels={"아침", "점심", "저녁", "간식"};
-                String[] values=entry==null?new String[]{"","","",""}:new String[]{entry.breakfast,entry.lunch,entry.dinner,entry.snack};
-                PendingIntent edit=PendingIntent.getActivity(c, 4200, care, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-                v.setOnClickPendingIntent(R.id.care_title,edit);
-                for(int j=0;j<4;j++){v.setTextViewText(mealIds[j],labels[j]+"\n"+(values[j].trim().isEmpty()?"＋ 입력":values[j]));v.setOnClickPendingIntent(mealIds[j],edit);}
-            }
-            day.add(Calendar.DAY_OF_MONTH, 1);
+        int defaultDay = (Calendar.getInstance().get(Calendar.DAY_OF_WEEK)+5)%7;
+        int selected = Math.max(0,Math.min(6,c.getSharedPreferences("prefs",Context.MODE_PRIVATE).getInt("care_selected_day",defaultDay)));
+        day.add(Calendar.DAY_OF_MONTH,selected);
+        String date=new SimpleDateFormat("yyyy-MM-dd",Locale.US).format(day.getTime());
+        String today=new SimpleDateFormat("yyyy-MM-dd",Locale.US).format(new Date());
+        v.setTextViewText(R.id.care_title,new SimpleDateFormat("M월 d일 E요일",Locale.KOREAN).format(day.getTime())+(date.equals(today)?" · 오늘":""));
+        NotionClient.CareEntry entry=d.care.get(date);
+        int[] ids={R.id.meal_breakfast,R.id.meal_lunch,R.id.meal_dinner,R.id.meal_snack};
+        String[] labels={"아침","점심","저녁","간식"},fields={"breakfast","lunch","dinner","snack"};
+        String[] values=entry==null?new String[]{"","","",""}:new String[]{entry.breakfast,entry.lunch,entry.dinner,entry.snack};
+        for(int i=0;i<4;i++){
+            v.setTextViewText(ids[i],labels[i]+"　"+(values[i].trim().isEmpty()?"기록하기":values[i].trim().replaceAll("\\s+"," ")));
+            Intent edit=new Intent(c,MainActivity.class).setData(android.net.Uri.parse("hyeona://meal/"+date+"/"+fields[i])).putExtra("section","care").putExtra("care_date",date).putExtra("care_field",fields[i]);
+            v.setOnClickPendingIntent(ids[i],PendingIntent.getActivity(c,4300+i,edit,PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT));
+            v.setContentDescription(ids[i],date+" "+labels[i]+" 수정");
         }
-        Intent prev = new Intent(c, WidgetProvider.class).setAction(WidgetProvider.ACTION_PREV_CARE_WEEK);
-        Intent next = new Intent(c, WidgetProvider.class).setAction(WidgetProvider.ACTION_NEXT_CARE_WEEK);
-        v.setOnClickPendingIntent(R.id.care_prev, PendingIntent.getBroadcast(c, 30, prev, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
-        v.setOnClickPendingIntent(R.id.care_next, PendingIntent.getBroadcast(c, 31, next, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
+        Intent prev=new Intent(c,WidgetProvider.class).setAction(WidgetProvider.ACTION_PREV_CARE_WEEK);
+        Intent next=new Intent(c,WidgetProvider.class).setAction(WidgetProvider.ACTION_NEXT_CARE_WEEK);
+        v.setOnClickPendingIntent(R.id.care_prev,PendingIntent.getBroadcast(c,30,prev,PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT));
+        v.setOnClickPendingIntent(R.id.care_next,PendingIntent.getBroadcast(c,31,next,PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT));
     }
 
     private static String careIcon(Date value, String startValue, String endValue, int cycle) {
@@ -395,10 +380,14 @@ public final class WidgetUpdater {
     }
 
     static void moveCareWeek(Context c, int amount) {
-        int current = c.getSharedPreferences("prefs", Context.MODE_PRIVATE).getInt("care_week_offset", 0);
-        int next = Math.max(-52, Math.min(52, current + amount));
-        c.getSharedPreferences("prefs", Context.MODE_PRIVATE).edit().putInt("care_week_offset", next).apply();
-        updateAll(c);
+        android.content.SharedPreferences p=c.getSharedPreferences("prefs",Context.MODE_PRIVATE);
+        int weekday=p.getInt("care_selected_day",(Calendar.getInstance().get(Calendar.DAY_OF_WEEK)+5)%7)+amount;
+        int week=p.getInt("care_week_offset",0);
+        if(weekday<0){weekday=6;week--;}else if(weekday>6){weekday=0;week++;}
+        p.edit().putInt("care_week_offset",week).putInt("care_selected_day",weekday).apply();
+        if(lastDashboard!=null&&lastMonth!=null&&careWeekStart(c).get(Calendar.DAY_OF_YEAR)==lastDashboard.careStart.get(Calendar.DAY_OF_YEAR)&&careWeekStart(c).get(Calendar.YEAR)==lastDashboard.careStart.get(Calendar.YEAR)){
+            AppWidgetManager.getInstance(c).updateAppWidget(new ComponentName(c,WidgetProvider.class),views(c,lastDashboard,lastMonth));
+        }else updateAll(c);
     }
 
     private static JSONObject request(String token, String method, String url, JSONObject body) throws Exception {

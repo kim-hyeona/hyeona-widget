@@ -36,8 +36,11 @@ jobs:
         with: {name: Hyeona-Widget-Windows-Installer, path: windows/dist/*.exe}
 
 
+  render:
+    uses: ./.github/workflows/widget-validation.yml
+
   publish:
-    needs: [android, windows]
+    needs: [android, windows, render]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -50,5 +53,5 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           cp installers/Hyeona-Widget-Android-APK/android-debug.apk installers/Hyeona-Widget-1.6.1.apk
-          gh release view v1.6.1-build28 || gh release create v1.6.1-build28 --target "$GITHUB_SHA" --title "1.6.1 build 28" --notes "Widget sync recovery, Windows calendar and meals, Android page details."
-          gh release upload v1.6.1-build28 installers/Hyeona-Widget-1.6.1.apk installers/Hyeona-Widget-Windows-Installer/*.exe --clobber
+          gh release view v1.6.1-build29 || gh release create v1.6.1-build29 --target "$GITHUB_SHA" --title "1.6.1 build 29" --notes "Android widget fixed-layout recovery; Android 15 rendering validation."
+          gh release upload v1.6.1-build29 installers/Hyeona-Widget-1.6.1.apk installers/Hyeona-Widget-Windows-Installer/*.exe --clobber

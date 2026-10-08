@@ -111,7 +111,7 @@ public final class WidgetUpdater {
     }
 
     private static RemoteViews views(Context c, Dashboard d, Calendar displayMonth) {
-        RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget);
+        RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget_stable);
         Calendar now = Calendar.getInstance();
         int month = displayMonth.get(Calendar.MONTH) + 1;
         String monthTitle = displayMonth.get(Calendar.YEAR) == now.get(Calendar.YEAR) ? month + "월" : displayMonth.get(Calendar.YEAR) + "년 " + month + "월";
@@ -144,24 +144,25 @@ public final class WidgetUpdater {
 
         for (int week = 0; week < 6; week++) {
             v.setViewVisibility(WEEKS[week], week < weeksNeeded ? View.VISIBLE : View.GONE);
-            v.removeAllViews(WEEKS[week]);
+
             for (int day = 0; day < 7; day++) {
-                RemoteViews cell = new RemoteViews(c.getPackageName(), R.layout.widget_day);
+                int index=week*7+day;
+                int cellId=viewId(c,"day_cell_"+index), numberId=viewId(c,"day_number_"+index), eventId=viewId(c,"day_event_"+index);
                 String key = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(grid.getTime());
                 Intent addEvent = new Intent(c, MainActivity.class).setData(android.net.Uri.parse("hyeona://calendar/" + key)).putExtra("section", "calendar").putExtra("calendar_date", key).putExtra("add_event", true);
                 PendingIntent addPi = PendingIntent.getActivity(c, 5000, addEvent, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-                cell.setOnClickPendingIntent(R.id.day_cell, addPi);
-                cell.setOnClickPendingIntent(R.id.day_number, addPi);
-                cell.setOnClickPendingIntent(R.id.day_event, addPi);
-                cell.setContentDescription(R.id.day_cell, key + " 일정 추가");
+                v.setOnClickPendingIntent(cellId, addPi);
+                v.setOnClickPendingIntent(numberId, addPi);
+                v.setOnClickPendingIntent(eventId, addPi);
+                v.setContentDescription(cellId, key + " 일정 추가");
                 boolean inMonth = grid.get(Calendar.MONTH) == displayMonth.get(Calendar.MONTH) && grid.get(Calendar.YEAR) == displayMonth.get(Calendar.YEAR);
-                cell.setTextViewText(R.id.day_number, String.valueOf(grid.get(Calendar.DAY_OF_MONTH)));
+                v.setTextViewText(numberId, String.valueOf(grid.get(Calendar.DAY_OF_MONTH)));
                 int color = inMonth ? Color.rgb(38, 62, 67) : Color.rgb(178, 188, 190);
                 if (day == 0 && inMonth) color = Color.rgb(201, 104, 115);
                 if (day == 6 && inMonth) color = Color.rgb(79, 148, 175);
                 if (key.equals(todayKey)) color = Color.WHITE;
-                cell.setTextColor(R.id.day_number, color);
-                if (key.equals(todayKey)) cell.setInt(R.id.day_number, "setBackgroundColor", Color.rgb(29, 36, 40));
+                v.setTextColor(numberId, color);
+                v.setInt(numberId, "setBackgroundColor", key.equals(todayKey)?Color.rgb(29,36,40):Color.TRANSPARENT);
                 List<Event> events = byDate.get(key);
                 StringBuilder names = new StringBuilder();
                 if (events != null && inMonth) {
@@ -171,9 +172,9 @@ public final class WidgetUpdater {
                     }
                     if (events.size() > 2) names.append(" +").append(events.size() - 2);
                 }
-                cell.setTextViewText(R.id.day_event, names.toString());
-                cell.setViewVisibility(R.id.day_event, names.length() == 0 ? View.INVISIBLE : View.VISIBLE);
-                v.addView(WEEKS[week], cell);
+                v.setTextViewText(eventId, names.toString());
+                v.setViewVisibility(eventId, names.length() == 0 ? View.INVISIBLE : View.VISIBLE);
+
                 grid.add(Calendar.DAY_OF_MONTH, 1);
             }
         }
@@ -198,37 +199,25 @@ public final class WidgetUpdater {
         return v;
     }
 
-    private static void bindCheckList(Context c, RemoteViews parent, int container, List<Event> items, int requestBase) {
-        parent.removeAllViews(container);
-        int count = Math.min(5, items.size());
-        for (int i = 0; i < count; i++) {
-            Event item = items.get(i);
-            RemoteViews row = new RemoteViews(c.getPackageName(), R.layout.widget_check_item);
-            row.setTextViewText(R.id.item_check, item.done ? "✓" : "○");
-            row.setTextViewText(R.id.item_text, item.title);
-            Intent toggle = new Intent(c, WidgetProvider.class).setAction(WidgetProvider.ACTION_TOGGLE).putExtra("page", item.id).putExtra("done", item.done);
-            row.setOnClickPendingIntent(R.id.item_check, PendingIntent.getBroadcast(c, requestBase + i, toggle, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
-            parent.addView(container, row);
-        }
-        if (count == 0) {
-            RemoteViews row = new RemoteViews(c.getPackageName(), R.layout.widget_text_item);
-            row.setTextViewText(R.id.item_text, "· 비어 있어요");
-            parent.addView(container, row);
+    private static int viewId(Context c,String name){return c.getResources().getIdentifier(name,"id",c.getPackageName());}
+    private static String listName(int container){return container==R.id.today_list?"today":container==R.id.memo_list?"memo":"routine";}
+    private static void bindCheckList(Context c,RemoteViews v,int container,List<Event> items,int requestBase){
+        String name=listName(container);int count=Math.min(5,items.size());
+        for(int i=0;i<5;i++){
+            int row=viewId(c,name+"_row_"+i),check=viewId(c,name+"_check_"+i),text=viewId(c,name+"_text_"+i);
+            v.setViewVisibility(row,i<Math.max(1,count)?View.VISIBLE:View.GONE);
+            v.setViewVisibility(check,i<count?View.VISIBLE:View.GONE);
+            v.setTextViewText(text,i<count?items.get(i).title:(i==0?"· 비어 있어요":""));
+            v.setOnClickPendingIntent(check,null);
+            if(i<count){Event item=items.get(i);v.setTextViewText(check,item.done?"✓":"○");Intent toggle=new Intent(c,WidgetProvider.class).setAction(WidgetProvider.ACTION_TOGGLE).putExtra("page",item.id).putExtra("done",item.done);v.setOnClickPendingIntent(check,PendingIntent.getBroadcast(c,requestBase+i,toggle,PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT));}
         }
     }
-
-    private static void bindTextList(Context c, RemoteViews parent, int container, List<Event> items, String empty) {
-        parent.removeAllViews(container);
-        int count = Math.min(5, items.size());
-        for (int i = 0; i < count; i++) {
-            RemoteViews row = new RemoteViews(c.getPackageName(), R.layout.widget_text_item);
-            row.setTextViewText(R.id.item_text, "· " + items.get(i).title);
-            parent.addView(container, row);
-        }
-        if (count == 0) {
-            RemoteViews row = new RemoteViews(c.getPackageName(), R.layout.widget_text_item);
-            row.setTextViewText(R.id.item_text, "· " + empty);
-            parent.addView(container, row);
+    private static void bindTextList(Context c,RemoteViews v,int container,List<Event> items,String empty){
+        String name=listName(container);int count=Math.min(5,items.size());
+        for(int i=0;i<5;i++){
+            v.setViewVisibility(viewId(c,name+"_row_"+i),i<Math.max(1,count)?View.VISIBLE:View.GONE);
+            v.setViewVisibility(viewId(c,name+"_check_"+i),View.GONE);
+            v.setTextViewText(viewId(c,name+"_text_"+i),i<count?"· "+items.get(i).title:(i==0?"· "+empty:""));
         }
     }
 

@@ -4,8 +4,8 @@
     android:minResizeWidth="250dp"
     android:minResizeHeight="500dp"
     android:updatePeriodMillis="1800000"
-    android:initialLayout="@layout/widget"
-    android:previewLayout="@layout/widget"
+    android:initialLayout="@layout/widget_stable"
+    android:previewLayout="@layout/widget_stable"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
     android:description="@string/widget_description" />

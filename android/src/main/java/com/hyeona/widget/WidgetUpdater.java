@@ -45,7 +45,16 @@ public final class WidgetUpdater {
     }
 
     static void update(Context c, AppWidgetManager m, int[] ids) {
+        Calendar month=Calendar.getInstance();month.set(Calendar.DAY_OF_MONTH,1);month.add(Calendar.MONTH,c.getSharedPreferences("prefs",0).getInt("widget_month_offset",0));
+        Dashboard cached=new Dashboard();cached.careStart=careWeekStart(c);restore(c,cached,month);cached.care=loadLocalCareWeek(c,cached.careStart);publish(c,m,ids,cached,month);
+        WidgetRefreshService.schedule(c);
+    }
+
+    static void runRefresh(Context c, Runnable finished) {
+        AppWidgetManager m = AppWidgetManager.getInstance(c);
+        int[] ids = m.getAppWidgetIds(new ComponentName(c, WidgetProvider.class));
         UPDATES.execute(() -> {
+          try {
             String token = c.getSharedPreferences("prefs", Context.MODE_PRIVATE).getString("token", "");
             int monthOffset = c.getSharedPreferences("prefs", Context.MODE_PRIVATE).getInt("widget_month_offset", 0);
             Calendar displayMonth = Calendar.getInstance();
@@ -53,21 +62,28 @@ public final class WidgetUpdater {
             displayMonth.add(Calendar.MONTH, monthOffset);
             Dashboard d = new Dashboard();
             d.careStart = careWeekStart(c);
+            restore(c,d,displayMonth);
+            d.care = loadLocalCareWeek(c,d.careStart);
+            publish(c,m,ids,d,displayMonth);
             if (token.isEmpty()) {
                 d.error = "앱을 열어 Notion 토큰을 저장해 주세요";
             } else {
-                try { d.events = fetchMonth(token, displayMonth); } catch (Exception e) { d.error = "캘린더 연결 확인"; }
-                try { d.money = fetchMoneySummary(token); } catch (Exception ignored) { }
-                try { d.wishes = fetchCount(token, WISHLIST_DB); } catch (Exception ignored) { }
-                try { d.memos = fetchSimple(token, MEMO_DB, "제목", false); } catch (Exception ignored) { }
+                try { d.events = fetchMonth(token, displayMonth); } catch (Exception e) { d.error = "캘린더 연결 실패 · 앱에서 새로고침"; }
+                publish(c,m,ids,d,displayMonth);
+                try { d.money = fetchMoneySummary(token); } catch (Exception e) { d.error="일부 데이터 연결 실패 · 앱에서 새로고침"; }
+                try { d.wishes = fetchCount(token, WISHLIST_DB); } catch (Exception e) { d.error="일부 데이터 연결 실패 · 앱에서 새로고침"; }
+                try { d.memos = fetchSimple(token, MEMO_DB, "제목", false); } catch (Exception e) { d.error="일부 데이터 연결 실패 · 앱에서 새로고침"; }
                 try {
-                    for (NotionClient.Item item : NotionClient.query(token, "todo"))
+                    List<NotionClient.Item> items=NotionClient.query(token,"todo");d.todos.clear();
+                    for (NotionClient.Item item : items)
                         if (!item.done) d.todos.add(new Event(item.id, item.title, "", false));
-                } catch (Exception ignored) { }
+                } catch (Exception e) { d.error="일부 데이터 연결 실패 · 앱에서 새로고침"; }
                 try {
-                    for (NotionClient.Item item : NotionClient.query(token, "routine"))
+                    List<NotionClient.Item> items=NotionClient.query(token,"routine");d.routines.clear();
+                    for (NotionClient.Item item : items)
                         d.routines.add(new Event(item.id, item.title.isEmpty() ? "제목 없음" : item.title, "", item.done));
                 } catch (Exception e) { d.routineError = "루틴 불러오기 실패 · 눌러 확인"; }
+                publish(c,m,ids,d,displayMonth);
                 d.care = loadLocalCareWeek(c, d.careStart);
                 try {
                     Calendar end = (Calendar) d.careStart.clone(); end.add(Calendar.DAY_OF_MONTH, 7);
@@ -76,11 +92,22 @@ public final class WidgetUpdater {
                     for (Map.Entry<String, NotionClient.CareEntry> e : remoteCare.entrySet()) {
                         if (!c.getSharedPreferences("prefs", Context.MODE_PRIVATE).getBoolean("care_"+e.getKey()+"_pending",false)) { d.care.put(e.getKey(), e.getValue()); saveLocalCare(c, e.getValue()); }
                     }
-                } catch (Exception ignored) { }
+                } catch (Exception e) { d.error="식단 연결 실패 · 앱에서 식단 확인"; }
             }
             lastDashboard = d; lastMonth = displayMonth;
-            for (int id : ids) m.updateAppWidget(id, views(c, d, displayMonth));
+            publish(c,m,ids,d,displayMonth);
+          } finally { finished.run(); }
         });
+    }
+
+    private static String cacheKey(Calendar month){return "widget_cache_"+month.get(Calendar.YEAR)+"_"+month.get(Calendar.MONTH);}
+    private static JSONArray encode(List<Event> items)throws Exception{JSONArray out=new JSONArray();for(Event e:items)out.put(new JSONObject().put("id",e.id).put("title",e.title).put("date",e.date).put("done",e.done));return out;}
+    private static List<Event> decode(JSONArray a)throws Exception{List<Event> out=new ArrayList<>();if(a!=null)for(int i=0;i<a.length();i++){JSONObject x=a.getJSONObject(i);out.add(new Event(x.optString("id"),x.optString("title"),x.optString("date"),x.optBoolean("done")));}return out;}
+    private static void restore(Context c,Dashboard d,Calendar month){try{JSONObject x=new JSONObject(c.getSharedPreferences("prefs",0).getString(cacheKey(month),"{}"));d.events=decode(x.optJSONArray("events"));d.todos=decode(x.optJSONArray("todos"));d.memos=decode(x.optJSONArray("memos"));d.routines=decode(x.optJSONArray("routines"));d.money=x.optString("money");d.wishes=x.optInt("wishes");}catch(Exception ignored){}}
+    private static void publish(Context c,AppWidgetManager m,int[] ids,Dashboard d,Calendar month){
+        lastDashboard=d;lastMonth=month;
+        for(int id:ids)m.updateAppWidget(id,views(c,d,month));
+        try{JSONObject x=new JSONObject().put("events",encode(d.events)).put("todos",encode(d.todos)).put("memos",encode(d.memos)).put("routines",encode(d.routines)).put("money",d.money).put("wishes",d.wishes);c.getSharedPreferences("prefs",0).edit().putString(cacheKey(month),x.toString()).apply();}catch(Exception ignored){}
     }
 
     private static RemoteViews views(Context c, Dashboard d, Calendar displayMonth) {
@@ -303,7 +330,7 @@ public final class WidgetUpdater {
             if (title.length() == 0 || dateObj == null) continue;
             String dateValue = dateObj.optString("start", "");
             if (dateValue.length() >= 10) dateValue = dateValue.substring(0, 10);
-            out.add(new Event(p.getString("id"), title.getJSONObject(0).optString("plain_text", "할 일"), dateValue, props.getJSONObject("완료").optBoolean("checkbox")));
+            out.add(new Event(p.getString("id"), title.getJSONObject(0).optString("plain_text", "할 일"), dateValue, (props.optJSONObject("완료") != null && props.optJSONObject("완료").optBoolean("checkbox"))));
         }
         return out;
     }

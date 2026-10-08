@@ -776,7 +776,8 @@ function cyclePhase(date, plan) {
   return null;
 }
 
-function renderCareCalendar() {
+async function renderCareCalendar() {
+  const generation = state.careGeneration = (state.careGeneration || 0) + 1;
   const now = new Date();
   const start = new Date(now.getFullYear(),now.getMonth(),now.getDate(),12);
   start.setDate(start.getDate() - start.getDay() + state.careWeekOffset * 7);
@@ -794,12 +795,20 @@ function renderCareCalendar() {
     html += '<button type="button" class="care-day' + (phase ? ' ' + phase.key : '') + (isToday ? ' today' : '') + '" data-care-date="' + localDateString(date) + '">' +
       '<span class="care-date">' + (date.getMonth() + 1) + '/' + date.getDate() + '</span>' +
       (phase ? '<span class="care-plan" aria-label="' + escapeHtml(phase.label) + '">' + phase.icon + '</span>' : '') +
-      '</button>';
+      '<span class="meal-summary" style="display:block;white-space:pre-wrap;font-size:13px;line-height:1.6;text-align:left">불러오는 중…</span></button>';
   }
   byId('care-grid').innerHTML = html;
   byId('care-grid').querySelectorAll('[data-care-date]').forEach((button) => {
     button.addEventListener('click',() => openCareEditor(button.dataset.careDate));
   });
+  try {
+    const entries = await window.hyeona.loadCareWeek(state.token,localDateString(start),localDateString(new Date(end.getFullYear(),end.getMonth(),end.getDate()+1,12)));
+    if (generation !== state.careGeneration) return;
+    byId('care-grid').querySelectorAll('[data-care-date]').forEach(button => {
+      const x=entries[button.dataset.careDate] || {};
+      button.querySelector('.meal-summary').textContent = [['아침','breakfast'],['점심','lunch'],['저녁','dinner'],['간식','snack']].map(([label,key]) => label+' · '+(x[key] || '미기록')).join('\n');
+    });
+  } catch(error) { if(generation===state.careGeneration) byId('care-grid').querySelectorAll('.meal-summary').forEach(el=>el.textContent='식단 연결 실패 · 눌러 다시 확인'); }
 }
 
 async function openCareEditor(date) {
@@ -1056,7 +1065,7 @@ function renderCalendar(data) {
   byId('month-label').textContent = data.monthLabel;
   let html = DOW.map((name) => '<div class="cal-dow">' + name + '</div>').join('');
   data.calendarDays.forEach((day) => {
-    html += '<div class="cal-day' + (day.isToday ? ' today' : '') + '">';
+    html += '<div role="button" tabindex="0" data-calendar-date="' + day.date + '" class="cal-day' + (day.isToday ? ' today' : '') + '">';
     html += '<div class="day-number">' + day.day + '</div>';
     (day.events || []).slice(0,3).forEach((event) => {
       html += '<div class="cal-event' + (event.done ? ' done' : '') + '" data-event-id="' +
@@ -1068,8 +1077,13 @@ function renderCalendar(data) {
     html += '</div>';
   });
   byId('cal-grid').innerHTML = html;
+  byId('cal-grid').querySelectorAll('[data-calendar-date]').forEach(cell => {
+    const add=()=>{openEditor('calendar');byId('editor-form').elements.date.value=cell.dataset.calendarDate;byId('editor-form').elements.title.focus();};
+    cell.onclick=add;cell.onkeydown=e=>{if(e.target===cell&&(e.key==='Enter'||e.key===' ')){e.preventDefault();add();}};
+  });
   byId('cal-grid').querySelectorAll('[data-event-id]').forEach((element) => {
-    element.addEventListener('click', () => {
+    element.addEventListener('click', (e) => {
+      e.stopPropagation();
       const item = (data.events || []).find((event) => event.id === element.dataset.eventId);
       if (item) openSidePeek('calendar',item);
     });
@@ -1184,6 +1198,7 @@ async function refreshDashboard() {
     const data = await window.hyeona.load(state.token, state.calendarOffset);
     state.data = data;
     renderDashboard(data);
+    renderCareCalendar();
     updateErrors(data.errors);
     const now = new Date();
     byId('sync-status').textContent =
@@ -1428,6 +1443,7 @@ byId('care-entry-form').onsubmit = async (event) => {
   try {
     const saved = await window.hyeona.saveCare(state.token,entry);
     state.careEntry.id = saved.id || state.careEntry.id;
+    renderCareCalendar();
     byId('care-entry-status').textContent = '노션에 저장됐어요 ✓';
   } catch (error) {
     byId('care-entry-status').textContent = '저장 실패 · ' + error.message;
@@ -1530,3 +1546,4 @@ state.weatherTimer = setInterval(initWeather,1200000);
 </script>
 </body>
 </html>
+

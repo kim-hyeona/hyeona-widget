@@ -424,11 +424,28 @@ ipcMain.handle('item:update', async (_event, token, type, id, payload) => {
   });
 });
 
+ipcMain.handle('care:week', async (_event, token, start, end) => {
+  const entries = {};
+  const body={page_size:100,sorts:[{timestamp:'last_edited_time',direction:'descending'}],filter:{and:[{property:'날짜',date:{on_or_after:start}},{property:'날짜',date:{before:end}}]}};
+  let data;
+  do {
+    data=await notion(token,'databases/'+CARE_DB+'/query','POST',body);
+    for(const page of data.results || []) {
+      const p=page.properties || {}, date=(p['날짜']?.date?.start || '').slice(0,10);
+      if(!date || entries[date]) continue;
+      entries[date]={id:page.id,date,breakfast:plainText(p['아침']),lunch:plainText(p['점심']),dinner:plainText(p['저녁']),snack:plainText(p['간식']),note:plainText(p['관리 메모'])};
+    }
+    body.start_cursor=data.next_cursor;
+  } while(data.has_more);
+  return entries;
+});
+
 ipcMain.handle('care:load', async (_event, token, date) => {
   const required = { 날짜:'date', 아침:'rich_text', 점심:'rich_text', 저녁:'rich_text', 간식:'rich_text', '관리 메모':'rich_text' };
   const shape = await databaseShape(token,CARE_DB,required);
   const data = await notion(token, 'databases/' + CARE_DB + '/query', 'POST', {
     page_size: 10,
+    sorts: [{timestamp:'last_edited_time',direction:'descending'}],
     filter: { property:'날짜', date:{ equals:date } },
   });
   const page = (data.results || [])[0];
@@ -577,3 +594,4 @@ app.whenReady().then(createWindow);
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
+

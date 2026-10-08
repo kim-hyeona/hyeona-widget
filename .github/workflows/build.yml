@@ -34,3 +34,21 @@ jobs:
       - run: npm run build
       - uses: actions/upload-artifact@v4
         with: {name: Hyeona-Widget-Windows-Installer, path: windows/dist/*.exe}
+
+
+  publish:
+    needs: [android, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: {path: installers}
+      - name: Publish 1.6.1 installers
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          cp installers/Hyeona-Widget-Android-APK/android-debug.apk installers/Hyeona-Widget-1.6.1.apk
+          gh release view v1.6.1-build28 || gh release create v1.6.1-build28 --target "$GITHUB_SHA" --title "1.6.1 build 28" --notes "Widget sync recovery, Windows calendar and meals, Android page details."
+          gh release upload v1.6.1-build28 installers/Hyeona-Widget-1.6.1.apk installers/Hyeona-Widget-Windows-Installer/*.exe --clobber

@@ -27,6 +27,9 @@ import java.util.Map;
 import java.util.concurrent.Executors;
 
 public final class WidgetUpdater {
+    private static final java.util.concurrent.ExecutorService UPDATES = Executors.newSingleThreadExecutor();
+    private static Dashboard lastDashboard;
+    private static Calendar lastMonth;
     private static final String CALENDAR_DB = "3cd946f4-5bc2-803d-a355-faf7751fb866";
     private static final String BLEEDING_DB = "c07869fb-aaa7-46a5-9366-3a5ff92ebd22";
     private static final String WISHLIST_DB = "3cd946f4-5bc2-80cb-875c-fe998bc81776";
@@ -42,7 +45,7 @@ public final class WidgetUpdater {
     }
 
     static void update(Context c, AppWidgetManager m, int[] ids) {
-        Executors.newSingleThreadExecutor().execute(() -> {
+        UPDATES.execute(() -> {
             String token = c.getSharedPreferences("prefs", Context.MODE_PRIVATE).getString("token", "");
             int monthOffset = c.getSharedPreferences("prefs", Context.MODE_PRIVATE).getInt("widget_month_offset", 0);
             Calendar displayMonth = Calendar.getInstance();
@@ -65,16 +68,17 @@ public final class WidgetUpdater {
                     for (NotionClient.Item item : NotionClient.query(token, "routine"))
                         d.routines.add(new Event(item.id, item.title.isEmpty() ? "제목 없음" : item.title, "", item.done));
                 } catch (Exception e) { d.routineError = "루틴 불러오기 실패 · 눌러 확인"; }
-                d.brain = c.getSharedPreferences("prefs", Context.MODE_PRIVATE).getString("brainDraft", "");
-                try { String remoteBrain = NotionClient.loadBrain(token); if (remoteBrain != null && !remoteBrain.trim().isEmpty()) d.brain = remoteBrain; } catch (Exception ignored) { }
                 d.care = loadLocalCareWeek(c, d.careStart);
                 try {
                     Calendar end = (Calendar) d.careStart.clone(); end.add(Calendar.DAY_OF_MONTH, 7);
                     SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
                     Map<String, NotionClient.CareEntry> remoteCare = NotionClient.loadCareWeek(token, f.format(d.careStart.getTime()), f.format(end.getTime()));
-                    for (Map.Entry<String, NotionClient.CareEntry> e : remoteCare.entrySet()) { d.care.put(e.getKey(), e.getValue()); saveLocalCare(c, e.getValue()); }
+                    for (Map.Entry<String, NotionClient.CareEntry> e : remoteCare.entrySet()) {
+                        if (!c.getSharedPreferences("prefs", Context.MODE_PRIVATE).getBoolean("care_"+e.getKey()+"_pending",false)) { d.care.put(e.getKey(), e.getValue()); saveLocalCare(c, e.getValue()); }
+                    }
                 } catch (Exception ignored) { }
             }
+            lastDashboard = d; lastMonth = displayMonth;
             for (int id : ids) m.updateAppWidget(id, views(c, d, displayMonth));
         });
     }
@@ -85,6 +89,9 @@ public final class WidgetUpdater {
         int month = displayMonth.get(Calendar.MONTH) + 1;
         String monthTitle = displayMonth.get(Calendar.YEAR) == now.get(Calendar.YEAR) ? month + "월" : displayMonth.get(Calendar.YEAR) + "년 " + month + "월";
         v.setTextViewText(R.id.month_title, monthTitle);
+        Intent jumpToday = new Intent(c, WidgetProvider.class).setAction(WidgetProvider.ACTION_TODAY);
+        v.setOnClickPendingIntent(R.id.today_button, PendingIntent.getBroadcast(c, 6, jumpToday, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
+        v.setTextViewText(R.id.calendar_hint, d.error.isEmpty() ? "날짜 칸을 누르면 일정 추가" : d.error);
 
         Intent open = new Intent(c, MainActivity.class);
         PendingIntent openPi = PendingIntent.getActivity(c, 1, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
@@ -114,6 +121,12 @@ public final class WidgetUpdater {
             for (int day = 0; day < 7; day++) {
                 RemoteViews cell = new RemoteViews(c.getPackageName(), R.layout.widget_day);
                 String key = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(grid.getTime());
+                Intent addEvent = new Intent(c, MainActivity.class).setData(android.net.Uri.parse("hyeona://calendar/" + key)).putExtra("section", "calendar").putExtra("calendar_date", key).putExtra("add_event", true);
+                PendingIntent addPi = PendingIntent.getActivity(c, 5000, addEvent, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+                cell.setOnClickPendingIntent(R.id.day_cell, addPi);
+                cell.setOnClickPendingIntent(R.id.day_number, addPi);
+                cell.setOnClickPendingIntent(R.id.day_event, addPi);
+                cell.setContentDescription(R.id.day_cell, key + " 일정 추가");
                 boolean inMonth = grid.get(Calendar.MONTH) == displayMonth.get(Calendar.MONTH) && grid.get(Calendar.YEAR) == displayMonth.get(Calendar.YEAR);
                 cell.setTextViewText(R.id.day_number, String.valueOf(grid.get(Calendar.DAY_OF_MONTH)));
                 int color = inMonth ? Color.rgb(38, 62, 67) : Color.rgb(178, 188, 190);
@@ -150,12 +163,9 @@ public final class WidgetUpdater {
         setSectionLink(c, v, R.id.routine_list, "routine", 12);
         v.setTextViewText(R.id.wish_summary, "♡ WISH · " + d.wishes);
         v.setTextViewText(R.id.money_summary, "◇ BLEEDING · " + (d.money.isEmpty() ? "0" : d.money));
-        String brainText = d.brain == null ? "" : d.brain.trim(); if (brainText.length() > 120) brainText = brainText.substring(0, 120) + "…";
-        v.setTextViewText(R.id.brain_summary, "BRAIN DUMP\n" + (brainText.isEmpty() ? "· 비어 있어요" : brainText));
         v.setTextViewText(R.id.packaging_summary, "◇ PACKAGING");
         setSectionLink(c, v, R.id.wish_summary, "wishlist", 20);
         setSectionLink(c, v, R.id.money_summary, "bleeding", 21);
-        setSectionLink(c, v, R.id.brain_summary, "brain", 22);
         v.setOnClickPendingIntent(R.id.packaging_summary, PendingIntent.getActivity(c, 23, notion, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
         bindCareWeek(c, v, d);
         return v;
@@ -244,6 +254,8 @@ public final class WidgetUpdater {
         String start = c.getSharedPreferences("prefs", Context.MODE_PRIVATE).getString("period_start", "");
         String end = c.getSharedPreferences("prefs", Context.MODE_PRIVATE).getString("period_end", "");
         int cycle = c.getSharedPreferences("prefs", Context.MODE_PRIVATE).getInt("cycle_length", 28);
+        int defaultDay = (Calendar.getInstance().get(Calendar.DAY_OF_WEEK) + 5) % 7;
+        int selected = Math.max(0, Math.min(6, c.getSharedPreferences("prefs", Context.MODE_PRIVATE).getInt("care_selected_day", defaultDay)));
         for (int i = 0; i < 7; i++) {
             String icon = careIcon(day.getTime(), start, end, cycle);
             String date = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(day.getTime());
@@ -251,9 +263,21 @@ public final class WidgetUpdater {
             String meals = entry == null ? "" : compactMeal(entry);
             String firstLine = day.get(Calendar.DAY_OF_MONTH) + " " + names[i] + (icon.isEmpty() ? "" : " " + icon);
             String detail = d.careError.isEmpty() ? (meals.isEmpty() ? "식단 입력" : meals) : d.careError;
-            v.setTextViewText(ids[i], firstLine + "\n" + detail);
+            v.setTextViewText(ids[i], names[i] + "\n" + day.get(Calendar.DAY_OF_MONTH));
+            v.setInt(ids[i], "setBackgroundColor", i == selected ? Color.rgb(211,234,236) : Color.TRANSPARENT);
+            v.setContentDescription(ids[i], date + " 식단 보기");
+            Intent select = new Intent(c, WidgetProvider.class).setAction(WidgetProvider.ACTION_SELECT_CARE).putExtra("day_index", i);
+            v.setOnClickPendingIntent(ids[i], PendingIntent.getBroadcast(c, 4100+i, select, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
             Intent care = new Intent(c, MainActivity.class).setData(android.net.Uri.parse("hyeona://care/" + date)).putExtra("section", "care").putExtra("care_date", date);
-            v.setOnClickPendingIntent(ids[i], PendingIntent.getActivity(c, 4000 + i, care, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
+            if(i == selected) {
+                v.setTextViewText(R.id.care_title, (day.get(Calendar.MONTH)+1)+"/"+day.get(Calendar.DAY_OF_MONTH)+" 식단 · 눌러 수정");
+                int[] mealIds={R.id.meal_breakfast,R.id.meal_lunch,R.id.meal_dinner,R.id.meal_snack};
+                String[] labels={"아침", "점심", "저녁", "간식"};
+                String[] values=entry==null?new String[]{"","","",""}:new String[]{entry.breakfast,entry.lunch,entry.dinner,entry.snack};
+                PendingIntent edit=PendingIntent.getActivity(c, 4200, care, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+                v.setOnClickPendingIntent(R.id.care_title,edit);
+                for(int j=0;j<4;j++){v.setTextViewText(mealIds[j],labels[j]+"\n"+(values[j].trim().isEmpty()?"＋ 입력":values[j]));v.setOnClickPendingIntent(mealIds[j],edit);}
+            }
             day.add(Calendar.DAY_OF_MONTH, 1);
         }
         Intent prev = new Intent(c, WidgetProvider.class).setAction(WidgetProvider.ACTION_PREV_CARE_WEEK);
@@ -358,6 +382,18 @@ public final class WidgetUpdater {
         updateAll(c);
     }
 
+    static void today(Context c) {
+        c.getSharedPreferences("prefs",Context.MODE_PRIVATE).edit().putInt("widget_month_offset",0).putInt("care_week_offset",0).remove("care_selected_day").apply();
+        updateAll(c);
+    }
+
+    static void selectCare(Context c, int day) {
+        c.getSharedPreferences("prefs",Context.MODE_PRIVATE).edit().putInt("care_selected_day",Math.max(0,Math.min(6,day))).apply();
+        if(lastDashboard == null || lastMonth == null) {updateAll(c); return;}
+        AppWidgetManager manager=AppWidgetManager.getInstance(c);
+        manager.updateAppWidget(new ComponentName(c,WidgetProvider.class),views(c,lastDashboard,lastMonth));
+    }
+
     static void moveCareWeek(Context c, int amount) {
         int current = c.getSharedPreferences("prefs", Context.MODE_PRIVATE).getInt("care_week_offset", 0);
         int next = Math.max(-52, Math.min(52, current + amount));
@@ -371,6 +407,7 @@ public final class WidgetUpdater {
         h.setRequestProperty("Authorization", "Bearer " + token);
         h.setRequestProperty("Notion-Version", "2022-06-28");
         h.setRequestProperty("Content-Type", "application/json");
+        h.setConnectTimeout(10000); h.setReadTimeout(15000);
         if (body != null) {
             h.setDoOutput(true);
             try (OutputStream o = h.getOutputStream()) { o.write(body.toString().getBytes(StandardCharsets.UTF_8)); }

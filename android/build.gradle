@@ -4,6 +4,7 @@ android {
     namespace "com.hyeona.widget"
     compileSdk 35
     defaultConfig {
+        testInstrumentationRunner "com.hyeona.widget.WidgetRenderInstrumentation"
         applicationId "com.hyeona.widget"
         minSdk 26
         targetSdk 35

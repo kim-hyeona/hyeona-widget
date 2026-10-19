@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, shell, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -17,17 +17,10 @@ const PACKAGING_URL = 'https://app.notion.com/p/35b946f45bc280d393f0ee3c366a283b
 
 const settingsPath = () => path.join(app.getPath('userData'), 'settings.json');
 
-function loadSettings() {
-  try {
-    return JSON.parse(fs.readFileSync(settingsPath(), 'utf8'));
-  } catch {
-    return {};
-  }
-}
-
-function saveSettings(next) {
-  fs.writeFileSync(settingsPath(), JSON.stringify(next));
-}
+const { createSettingsStore } = require('./secure-settings.cjs');
+const settingsStore = createSettingsStore({ fs, settingsPath, safeStorage });
+const loadSettings = () => settingsStore.load();
+const saveSettings = (next) => settingsStore.save(next);
 
 function mergeSettings(patch) {
   const next = Object.assign({}, loadSettings(), patch);
@@ -594,4 +587,5 @@ app.whenReady().then(createWindow);
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
+
 

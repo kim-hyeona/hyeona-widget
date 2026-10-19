@@ -55,7 +55,7 @@ public final class WidgetUpdater {
         int[] ids = m.getAppWidgetIds(new ComponentName(c, WidgetProvider.class));
         UPDATES.execute(() -> {
           try {
-            String token = c.getSharedPreferences("prefs", Context.MODE_PRIVATE).getString("token", "");
+            String token = TokenStore.read(c);
             int monthOffset = c.getSharedPreferences("prefs", Context.MODE_PRIVATE).getInt("widget_month_offset", 0);
             Calendar displayMonth = Calendar.getInstance();
             displayMonth.set(Calendar.DAY_OF_MONTH, 1);
@@ -368,7 +368,7 @@ public final class WidgetUpdater {
         if (id == null) return;
         Executors.newSingleThreadExecutor().execute(() -> {
             try {
-                String token = c.getSharedPreferences("prefs", Context.MODE_PRIVATE).getString("token", "");
+                String token = TokenStore.read(c);
                 JSONObject props = new JSONObject().put("완료", new JSONObject().put("checkbox", !done));
                 request(token, "PATCH", "https://api.notion.com/v1/pages/" + id, new JSONObject().put("properties", props));
             } catch (Exception ignored) { }
@@ -436,3 +436,4 @@ public final class WidgetUpdater {
         Event(String id, String title, String date, boolean done) { this.id = id; this.title = title; this.date = date; this.done = done; }
     }
 }
+

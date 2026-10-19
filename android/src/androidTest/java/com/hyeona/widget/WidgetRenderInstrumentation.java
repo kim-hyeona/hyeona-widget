@@ -11,7 +11,7 @@ public class WidgetRenderInstrumentation extends Instrumentation {
  @Override public void onCreate(Bundle args){super.onCreate(args);start();}
  @Override public void onStart(){Bundle result=new Bundle();try{final Throwable[] failure={null};runOnMainSync(()->{try{verify();}catch(Throwable e){failure[0]=e;}});if(failure[0]!=null)throw failure[0];result.putString("stream","WIDGET_RENDER_OK\n");finish(-1,result);}catch(Throwable e){result.putString("stream",android.util.Log.getStackTraceString(e));finish(0,result);}}
  private void verify()throws Exception{
-  Context c=getTargetContext();Class<?> dashboard=Class.forName("com.hyeona.widget.WidgetUpdater$Dashboard");Constructor<?> dc=dashboard.getDeclaredConstructor();dc.setAccessible(true);
+  Context c=getTargetContext();TokenStoreInstrumentation.verify(c);Class<?> dashboard=Class.forName("com.hyeona.widget.WidgetUpdater$Dashboard");Constructor<?> dc=dashboard.getDeclaredConstructor();dc.setAccessible(true);
   Method render=WidgetUpdater.class.getDeclaredMethod("views",Context.class,dashboard,Calendar.class);render.setAccessible(true);
   Field careStart=dashboard.getDeclaredField("careStart");careStart.setAccessible(true);
   Class<?> event=Class.forName("com.hyeona.widget.WidgetUpdater$Event");Constructor<?> ec=event.getDeclaredConstructor(String.class,String.class,String.class,boolean.class);ec.setAccessible(true);
@@ -27,3 +27,4 @@ public class WidgetRenderInstrumentation extends Instrumentation {
   }
  }
 }
+

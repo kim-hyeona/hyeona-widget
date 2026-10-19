@@ -7,7 +7,7 @@ function fixture(){
   const context={require:name=>name==='electron'?{
     app:{getPath:()=>'/test',whenReady:()=>({then(){}}),on(){}},
     ipcMain:{handle:(name,fn)=>handlers[name]=fn},shell:{openExternal:async()=>{}}
-  }:name==='fs'?{readFileSync:()=>JSON.stringify(settings),writeFileSync:(_,value)=>settings=JSON.parse(value)}:require(name),
+  }:name==='fs'?{readFileSync:()=>JSON.stringify(settings),writeFileSync:(_,value)=>settings=JSON.parse(value),renameSync(){}}:name==='./secure-settings.cjs'?require('./secure-settings.cjs'):require(name),
   fetch:async(_,options)=>{saved=JSON.parse(options.body);await new Promise(resolve=>finish=resolve);return{ok:true,json:async()=>({})}},URLSearchParams};
   vm.runInNewContext(fs.readFileSync(__dirname+'/main.js','utf8'),context);
   return{handlers,get settings(){return settings},get saved(){return saved},finish:()=>finish()};
@@ -32,7 +32,8 @@ test('meal week reads every page, preserving latest record for duplicate dates',
   const handlers={},calls=[];
   const page=(id,date,value)=>({id,properties:{날짜:{date:{start:date}},아침:{rich_text:[{plain_text:value}]}}});
   const replies=[{results:[page('latest','2026-10-09','밥')],has_more:true,next_cursor:'next'},{results:[page('older','2026-10-09','old'),page('other','2026-10-10','빵')],has_more:false}];
-  vm.runInNewContext(fs.readFileSync(__dirname+'/main.js','utf8'),{require:name=>name==='electron'?{app:{getPath:()=>'/test',whenReady:()=>({then(){}}),on(){}},ipcMain:{handle:(n,f)=>handlers[n]=f},shell:{}}:require(name),fetch:async(url,options)=>{calls.push(JSON.parse(options.body));return{ok:true,json:async()=>replies.shift()};},URLSearchParams});
+  vm.runInNewContext(fs.readFileSync(__dirname+'/main.js','utf8'),{require:name=>name==='electron'?{app:{getPath:()=>'/test',whenReady:()=>({then(){}}),on(){}},ipcMain:{handle:(n,f)=>handlers[n]=f},shell:{}}:name==='./secure-settings.cjs'?require('./secure-settings.cjs'):require(name),fetch:async(url,options)=>{calls.push(JSON.parse(options.body));return{ok:true,json:async()=>replies.shift()};},URLSearchParams});
   const result=await handlers['care:week'](null,'test','2026-10-05','2026-10-12');
   assert.equal(result['2026-10-09'].breakfast,'밥');assert.equal(result['2026-10-10'].breakfast,'빵');assert.equal(calls[1].start_cursor,'next');assert.equal(calls[0].filter.and[1].date.before,'2026-10-12');
 });
+

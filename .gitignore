@@ -1,3 +1,14 @@
 node_modules/
 windows/dist/
 *.log
+
+
+.env*
+!.env.example
+settings.json
+settings.json.tmp
+local.properties
+.gradle/
+**/build/
+*.jks
+*.keystore

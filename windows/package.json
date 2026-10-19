@@ -5,7 +5,7 @@
   "main": "main.js",
   "author": "kim-hyeona",
   "scripts": {
-    "test": "node --test main.test.cjs",
+    "test": "node --test *.test.cjs",
     "start": "electron .",
     "build": "electron-builder --win portable --x64"
   },
@@ -22,7 +22,8 @@
       "preload.js",
       "index.html",
       "dashboard.css",
-      "assets/**/*"
+      "assets/**/*",
+      "secure-settings.cjs"
     ],
     "win": {
       "target": "portable",
@@ -30,4 +31,3 @@
     }
   }
 }
-

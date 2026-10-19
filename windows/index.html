@@ -1040,7 +1040,14 @@ async function loadWeather(latitude, longitude, place) {
 }
 
 async function initWeather() {
-  const settings = await window.hyeona.getSettings();
+  let settings;
+  try {
+    settings = await window.hyeona.getSettings();
+  } catch {
+    showSettings();
+    byId('settings-error').textContent = '저장된 토큰을 열지 못했어요. 기존 설정은 보존됩니다. 원래 OS 계정에서 실행해 주세요.';
+    return;
+  }
   const lat = settings.weatherLat == null ? 37.5665 : settings.weatherLat;
   const lon = settings.weatherLon == null ? 126.9780 : settings.weatherLon;
   const label = settings.weatherLabel || '서울';
@@ -1056,7 +1063,14 @@ function useCurrentLocation() {
     await window.hyeona.setSettings({ weatherLat:lat, weatherLon:lon, weatherLabel:'현재 위치' });
     await loadWeather(lat, lon, '현재 위치');
   }, async () => {
-    const settings = await window.hyeona.getSettings();
+    let settings;
+  try {
+    settings = await window.hyeona.getSettings();
+  } catch {
+    showSettings();
+    byId('settings-error').textContent = '저장된 토큰을 열지 못했어요. 기존 설정은 보존됩니다. 원래 OS 계정에서 실행해 주세요.';
+    return;
+  }
     await loadWeather(settings.weatherLat || 37.5665, settings.weatherLon || 126.9780, settings.weatherLabel || '서울');
   }, { enableHighAccuracy:false, timeout:8000, maximumAge:3600000 });
 }
@@ -1396,7 +1410,12 @@ byId('token-save').onclick = async () => {
     byId('settings-error').textContent = '토큰을 입력해줘';
     return;
   }
-  await window.hyeona.setSettings({ token });
+  try {
+    await window.hyeona.setSettings({ token });
+  } catch {
+    byId('settings-error').textContent = '토큰을 안전하게 저장하지 못했어요. OS 계정과 저장 공간을 확인해 주세요.';
+    return;
+  }
   state.token = token;
   showDashboard();
   await refreshDashboard();
@@ -1526,7 +1545,14 @@ setInterval(refreshDashboard,60000);
 state.weatherTimer = setInterval(initWeather,1200000);
 
 (async () => {
-  const settings = await window.hyeona.getSettings();
+  let settings;
+  try {
+    settings = await window.hyeona.getSettings();
+  } catch {
+    showSettings();
+    byId('settings-error').textContent = '저장된 토큰을 열지 못했어요. 기존 설정은 보존됩니다. 원래 OS 계정에서 실행해 주세요.';
+    return;
+  }
   state.cyclePlan = settings.cyclePlan || {};
   fillCycleForm();
   renderCareCalendar();
@@ -1546,4 +1572,5 @@ state.weatherTimer = setInterval(initWeather,1200000);
 </script>
 </body>
 </html>
+
 

@@ -25,7 +25,7 @@ final class NotificationKeeper {
         post(app, SCHEDULE_ID, "오늘 일정", "일정을 불러오는 중이에요…");
         post(app, TODO_ID, "오늘 할 일", "할 일을 불러오는 중이에요…");
         Executors.newSingleThreadExecutor().execute(() -> {
-            String token = app.getSharedPreferences("prefs", Context.MODE_PRIVATE).getString("token", "");
+            String token = TokenStore.read(app);
             if (token.isEmpty()) {
                 post(app, SCHEDULE_ID, "오늘 일정", "눌러서 Notion 토큰을 연결해 주세요");
                 post(app, TODO_ID, "오늘 할 일", "눌러서 Notion 토큰을 연결해 주세요");
@@ -88,3 +88,4 @@ final class NotificationKeeper {
         ((NotificationManager)c.getSystemService(Context.NOTIFICATION_SERVICE)).notify(id, n);
     }
 }
+

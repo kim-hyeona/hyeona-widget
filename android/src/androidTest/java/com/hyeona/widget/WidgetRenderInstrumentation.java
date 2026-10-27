@@ -22,8 +22,10 @@ public class WidgetRenderInstrumentation extends Instrumentation {
    RemoteViews original=(RemoteViews)render.invoke(null,c,d,month);Parcel parcel=Parcel.obtain();original.writeToParcel(parcel,0);parcel.setDataPosition(0);RemoteViews remote=RemoteViews.CREATOR.createFromParcel(parcel);parcel.recycle();
    FrameLayout parent=new FrameLayout(c);View view=remote.apply(c,parent);remote.reapply(c,view);view.measure(View.MeasureSpec.makeMeasureSpec(384,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(720,View.MeasureSpec.EXACTLY));view.layout(0,0,384,720);
    if(previous!=null)remote.reapply(c,previous);previous=view;
-   android.appwidget.AppWidgetHostView host=new android.appwidget.AppWidgetHostView(c);for(android.appwidget.AppWidgetProviderInfo info:android.appwidget.AppWidgetManager.getInstance(c).getInstalledProviders())if(info.provider.getPackageName().equals(c.getPackageName())){host.setAppWidget(100,info);break;}host.updateAppWidget(remote);if(host.findViewById(R.id.meal_breakfast)==null)throw new AssertionError("Host entered error view");
-   if(view.findViewById(R.id.meal_breakfast)==null)throw new AssertionError("Missing meal row");
+   android.appwidget.AppWidgetHostView host=new android.appwidget.AppWidgetHostView(c);for(android.appwidget.AppWidgetProviderInfo info:android.appwidget.AppWidgetManager.getInstance(c).getInstalledProviders())if(info.provider.getPackageName().equals(c.getPackageName())){host.setAppWidget(100,info);break;}host.updateAppWidget(remote);if(host.findViewById(R.id.day_cell_0)==null)throw new AssertionError("Host entered error view");
+   for(String removed:new String[]{"meal_breakfast","care_title"}){int id=c.getResources().getIdentifier(removed,"id",c.getPackageName());if(id!=0&&view.findViewById(id)!=null)throw new AssertionError("Unexpected meal panel");}
+   if(view.findViewById(R.id.day_cell_0)==null)throw new AssertionError("Missing calendar cell");
   }
  }
 }
+

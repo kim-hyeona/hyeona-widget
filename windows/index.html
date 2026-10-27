@@ -495,11 +495,6 @@ button:disabled { cursor:wait; opacity:.55; }
 .small-button { border:0; border-radius:8px; padding:7px 9px; background:#f2efed; font-size:11px; }
 .small-button.danger { color:var(--danger); }
 .modal-status { min-height:18px; margin-top:10px; color:var(--muted); font-size:11px; }
-.care-entry-form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
-.care-entry-form label { display:flex; flex-direction:column; gap:6px; color:var(--muted); font-size:11px; }
-.care-entry-form textarea { min-height:86px; resize:vertical; }
-.care-entry-form .wide { grid-column:1 / -1; }
-.care-entry-actions { display:flex; justify-content:flex-end; align-items:center; gap:12px; margin-top:14px; }
 
 @media (max-width:1220px) {
   .utility-row { grid-template-columns:1fr 1fr; }
@@ -620,29 +615,6 @@ button:disabled { cursor:wait; opacity:.55; }
       <button class="pill" id="packaging-button"><span>the packaging 🎀</span><span class="pill-arrow">↗</span></button>
     </div>
 
-    <section class="care-calendar" aria-labelledby="care-calendar-title">
-      <div class="care-calendar-head">
-        <div>
-          <span class="care-kicker">DIET · CARE</span>
-          <h2 id="care-calendar-title">식단 / 관리 캘린더</h2>
-        </div>
-        <div class="care-month-nav">
-          <button id="care-prev" aria-label="이전 주">‹</button>
-          <strong id="care-month-label"></strong>
-          <button id="care-next" aria-label="다음 주">›</button>
-        </div>
-      </div>
-      <form class="cycle-form" id="cycle-form">
-        <label>관리 시작<input type="date" name="periodStart"></label>
-        <label>관리 종료<input type="date" name="periodEnd"></label>
-        <label>평균 주기(일)<input type="number" name="cycleLength" min="21" max="45" value="28"></label>
-        <button class="ghost-button" type="submit">일정 표시</button>
-        <span id="cycle-status"></span>
-      </form>
-      <div class="cycle-legend" aria-label="개인 관리 기호"><span class="period">🫧</span><span class="follicular">💊</span><span class="ovulation">✦</span><span class="luteal">🍦</span></div>
-      <div class="care-grid" id="care-grid"></div>
-      <p class="cycle-note">✦는 평균 주기를 기준으로 계산한 예상일이에요. 복용·사용 일정은 처방과 의료진 안내를 우선해줘.</p>
-    </section>
 </main>
 
 <div class="modal" id="modal">
@@ -654,26 +626,6 @@ button:disabled { cursor:wait; opacity:.55; }
     <form class="editor-form" id="editor-form"></form>
     <div class="editor-list" id="editor-list"></div>
     <div class="modal-status" id="modal-status"></div>
-  </div>
-</div>
-
-<div class="modal" id="care-modal">
-  <div class="modal-box">
-    <div class="modal-head">
-      <h2 id="care-modal-title">식단 / 관리</h2>
-      <button class="close-button" id="care-modal-close">×</button>
-    </div>
-    <form id="care-entry-form" class="care-entry-form">
-      <label>아침<textarea class="field" name="breakfast" spellcheck="false"></textarea></label>
-      <label>점심<textarea class="field" name="lunch" spellcheck="false"></textarea></label>
-      <label>저녁<textarea class="field" name="dinner" spellcheck="false"></textarea></label>
-      <label>간식<textarea class="field" name="snack" spellcheck="false"></textarea></label>
-      <label class="wide">관리 메모<textarea class="field" name="note" spellcheck="false"></textarea></label>
-      <div class="care-entry-actions wide">
-        <span class="modal-status" id="care-entry-status"></span>
-        <button class="primary-button" type="submit">노션에 저장</button>
-      </div>
-    </form>
   </div>
 </div>
 
@@ -718,13 +670,10 @@ let state = {
   calendarOffset:0,
   brainDirty:false,
   brainSaving:false,
-  careWeekOffset:0,
-  cyclePlan:{},
   sidePeekUrl:'',
   sidePeekDetail:null,
   sidePeekType:'',
   sidePeekEditing:false,
-  careEntry:null
 };
 
 const byId = (id) => document.getElementById(id);
@@ -748,89 +697,6 @@ function localDateString(date) {
     String(date.getMonth() + 1).padStart(2,'0'),
     String(date.getDate()).padStart(2,'0')
   ].join('-');
-}
-
-function parseLocalDate(value) {
-  if (!value) return null;
-  const parts = value.split('-').map(Number);
-  if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) return null;
-  return new Date(parts[0],parts[1] - 1,parts[2],12,0,0,0);
-}
-
-function cyclePhase(date, plan) {
-  const anchor = parseLocalDate(plan.periodStart);
-  const firstEnd = parseLocalDate(plan.periodEnd);
-  const cycleLength = Number(plan.cycleLength || 28);
-  if (!anchor || !firstEnd || cycleLength < 21 || cycleLength > 45) return null;
-  const dayMs = 86400000;
-  const periodDays = Math.max(1,Math.round((firstEnd - anchor) / dayMs) + 1);
-  const cycleIndex = Math.floor((date - anchor) / dayMs / cycleLength);
-  const cycleStart = new Date(anchor);
-  cycleStart.setDate(anchor.getDate() + cycleIndex * cycleLength);
-  const dayInCycle = Math.round((date - cycleStart) / dayMs);
-  const ovulationDay = cycleLength - 14;
-  if (dayInCycle >= 0 && dayInCycle < periodDays) return { key:'period', icon:'🫧', label:'개인 관리 1' };
-  if (dayInCycle >= periodDays && dayInCycle < ovulationDay) return { key:'follicular', icon:'💊', label:'개인 관리 2' };
-  if (dayInCycle === ovulationDay) return { key:'ovulation', icon:'✦', label:'예상 전환일' };
-  if (dayInCycle > ovulationDay && dayInCycle < cycleLength) return { key:'luteal', icon:'🍦', label:'개인 관리 3' };
-  return null;
-}
-
-async function renderCareCalendar() {
-  const generation = state.careGeneration = (state.careGeneration || 0) + 1;
-  const now = new Date();
-  const start = new Date(now.getFullYear(),now.getMonth(),now.getDate(),12);
-  start.setDate(start.getDate() - start.getDay() + state.careWeekOffset * 7);
-  const end = new Date(start);
-  end.setDate(start.getDate() + 6);
-  byId('care-month-label').textContent =
-    String(start.getMonth() + 1).padStart(2,'0') + '.' + String(start.getDate()).padStart(2,'0') +
-    ' — ' + String(end.getMonth() + 1).padStart(2,'0') + '.' + String(end.getDate()).padStart(2,'0');
-  let html = DOW.map((name) => '<div class="care-dow">' + name + '</div>').join('');
-  for (let index = 0; index < 7; index += 1) {
-    const date = new Date(start);
-    date.setDate(start.getDate() + index);
-    const phase = cyclePhase(date,state.cyclePlan);
-    const isToday = localDateString(date) === localDateString(now);
-    html += '<button type="button" class="care-day' + (phase ? ' ' + phase.key : '') + (isToday ? ' today' : '') + '" data-care-date="' + localDateString(date) + '">' +
-      '<span class="care-date">' + (date.getMonth() + 1) + '/' + date.getDate() + '</span>' +
-      (phase ? '<span class="care-plan" aria-label="' + escapeHtml(phase.label) + '">' + phase.icon + '</span>' : '') +
-      '<span class="meal-summary" style="display:block;white-space:pre-wrap;font-size:13px;line-height:1.6;text-align:left">불러오는 중…</span></button>';
-  }
-  byId('care-grid').innerHTML = html;
-  byId('care-grid').querySelectorAll('[data-care-date]').forEach((button) => {
-    button.addEventListener('click',() => openCareEditor(button.dataset.careDate));
-  });
-  try {
-    const entries = await window.hyeona.loadCareWeek(state.token,localDateString(start),localDateString(new Date(end.getFullYear(),end.getMonth(),end.getDate()+1,12)));
-    if (generation !== state.careGeneration) return;
-    byId('care-grid').querySelectorAll('[data-care-date]').forEach(button => {
-      const x=entries[button.dataset.careDate] || {};
-      button.querySelector('.meal-summary').textContent = [['아침','breakfast'],['점심','lunch'],['저녁','dinner'],['간식','snack']].map(([label,key]) => label+' · '+(x[key] || '미기록')).join('\n');
-    });
-  } catch(error) { if(generation===state.careGeneration) byId('care-grid').querySelectorAll('.meal-summary').forEach(el=>el.textContent='식단 연결 실패 · 눌러 다시 확인'); }
-}
-
-async function openCareEditor(date) {
-  state.careEntry = null;
-  byId('care-modal-title').textContent = date + ' 식단 / 관리';
-  byId('care-entry-status').textContent = '노션에서 불러오는 중…';
-  byId('care-modal').style.display = 'flex';
-  const form = byId('care-entry-form');
-  form.reset();
-  try {
-    const entry = await window.hyeona.loadCare(state.token,date);
-    state.careEntry = entry;
-    for (const name of ['breakfast','lunch','dinner','snack','note']) form.elements[name].value = entry[name] || '';
-    byId('care-entry-status').textContent = '날짜 칸을 눌러 언제든 수정할 수 있어요';
-  } catch (error) {
-    byId('care-entry-status').textContent = '불러오기 실패 · ' + error.message;
-  }
-}
-
-function closeCareEditor() {
-  byId('care-modal').style.display = 'none';
-  state.careEntry = null;
 }
 
 function renderNotionBlocks(blocks, depth = 0) {
@@ -982,14 +848,6 @@ async function deleteSidePeek() {
     deleteButton.disabled = false;
     deleteButton.textContent = '삭제';
   }
-}
-
-function fillCycleForm() {
-  const form = byId('cycle-form');
-  ['periodStart','periodEnd','cycleLength'].forEach((name) => {
-    form.elements[name].value = state.cyclePlan[name] || '';
-  });
-  if (!form.elements.cycleLength.value) form.elements.cycleLength.value = '28';
 }
 
 function tickClock() {
@@ -1198,7 +1056,6 @@ async function refreshDashboard() {
     const data = await window.hyeona.load(state.token, state.calendarOffset);
     state.data = data;
     renderDashboard(data);
-    renderCareCalendar();
     updateErrors(data.errors);
     const now = new Date();
     byId('sync-status').textContent =
@@ -1423,59 +1280,6 @@ byId('routine-add').onclick = () => openEditor('routine');
 byId('memo-add').onclick = () => openEditor('memo');
 byId('grind-button').onclick = () => state.data && window.hyeona.openLink(state.data.links.grind);
 byId('packaging-button').onclick = () => state.data && window.hyeona.openLink(state.data.links.packaging);
-byId('care-prev').onclick = () => {
-  state.careWeekOffset -= 1;
-  renderCareCalendar();
-};
-byId('care-next').onclick = () => {
-  state.careWeekOffset += 1;
-  renderCareCalendar();
-};
-byId('care-entry-form').onsubmit = async (event) => {
-  event.preventDefault();
-  if (!state.careEntry) return;
-  const formData = new FormData(event.currentTarget);
-  const entry = { id:state.careEntry.id || '', date:state.careEntry.date };
-  for (const name of ['breakfast','lunch','dinner','snack','note']) entry[name] = formData.get(name) || '';
-  const button = event.currentTarget.querySelector('button[type="submit"]');
-  button.disabled = true;
-  byId('care-entry-status').textContent = '노션에 저장 중…';
-  try {
-    const saved = await window.hyeona.saveCare(state.token,entry);
-    state.careEntry.id = saved.id || state.careEntry.id;
-    renderCareCalendar();
-    byId('care-entry-status').textContent = '노션에 저장됐어요 ✓';
-  } catch (error) {
-    byId('care-entry-status').textContent = '저장 실패 · ' + error.message;
-  } finally {
-    button.disabled = false;
-  }
-};
-byId('cycle-form').onsubmit = async (event) => {
-  event.preventDefault();
-  const formData = new FormData(event.currentTarget);
-  const plan = {
-    periodStart:formData.get('periodStart') || '',
-    periodEnd:formData.get('periodEnd') || '',
-    cycleLength:Number(formData.get('cycleLength') || 28)
-  };
-  const dates = [parseLocalDate(plan.periodStart),parseLocalDate(plan.periodEnd)];
-  if (dates.some((date) => !date) || dates[0] > dates[1] || plan.cycleLength < 21 || plan.cycleLength > 45) {
-    byId('cycle-status').textContent = '날짜 순서를 확인해줘';
-    return;
-  }
-  state.cyclePlan = plan;
-  await window.hyeona.setSettings({ cyclePlan:plan });
-  const today = new Date();
-  const currentWeek = new Date(today.getFullYear(),today.getMonth(),today.getDate(),12);
-  currentWeek.setDate(currentWeek.getDate() - currentWeek.getDay());
-  const targetWeek = new Date(dates[0]);
-  targetWeek.setDate(targetWeek.getDate() - targetWeek.getDay());
-  state.careWeekOffset = Math.round((targetWeek - currentWeek) / 604800000);
-  renderCareCalendar();
-  byId('cycle-status').textContent = '이 PC에 저장됨 ✓';
-};
-
 byId('notion-button').onclick = async () => {
   byId('notion-button').disabled = true;
   try {
@@ -1499,14 +1303,12 @@ byId('brain-dump').addEventListener('blur',saveBrainDump);
 
 byId('modal-close').onclick = closeEditor;
 byId('modal').onclick = (event) => { if (event.target === byId('modal')) closeEditor(); };
-byId('care-modal-close').onclick = closeCareEditor;
-byId('care-modal').onclick = (event) => { if (event.target === byId('care-modal')) closeCareEditor(); };
 window.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && byId('side-peek').classList.contains('open')) {
     closeSidePeek();
     return;
   }
-  if (event.key === 'Escape') { closeEditor(); closeCareEditor(); }
+  if (event.key === 'Escape') { closeEditor(); }
   if (event.ctrlKey && event.key === 'Enter' && document.activeElement === byId('brain-dump')) saveBrainDump();
 });
 byId('side-peek-close').onclick = closeSidePeek;
@@ -1527,9 +1329,6 @@ state.weatherTimer = setInterval(initWeather,1200000);
 
 (async () => {
   const settings = await window.hyeona.getSettings();
-  state.cyclePlan = settings.cyclePlan || {};
-  fillCycleForm();
-  renderCareCalendar();
   if (settings.token) {
     state.token = settings.token;
     if (settings.brainDraftDirty) {
@@ -1546,4 +1345,5 @@ state.weatherTimer = setInterval(initWeather,1200000);
 </script>
 </body>
 </html>
+
 

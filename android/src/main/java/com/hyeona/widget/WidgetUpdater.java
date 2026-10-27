@@ -46,7 +46,7 @@ public final class WidgetUpdater {
 
     static void update(Context c, AppWidgetManager m, int[] ids) {
         Calendar month=Calendar.getInstance();month.set(Calendar.DAY_OF_MONTH,1);month.add(Calendar.MONTH,c.getSharedPreferences("prefs",0).getInt("widget_month_offset",0));
-        Dashboard cached=new Dashboard();cached.careStart=careWeekStart(c);restore(c,cached,month);cached.care=loadLocalCareWeek(c,cached.careStart);publish(c,m,ids,cached,month);
+        Dashboard cached=new Dashboard();cached.careStart=careWeekStart(c);restore(c,cached,month);publish(c,m,ids,cached,month);
         WidgetRefreshService.schedule(c);
     }
 
@@ -63,7 +63,6 @@ public final class WidgetUpdater {
             Dashboard d = new Dashboard();
             d.careStart = careWeekStart(c);
             restore(c,d,displayMonth);
-            d.care = loadLocalCareWeek(c,d.careStart);
             publish(c,m,ids,d,displayMonth);
             if (token.isEmpty()) {
                 d.error = "앱을 열어 Notion 토큰을 저장해 주세요";
@@ -84,15 +83,7 @@ public final class WidgetUpdater {
                         d.routines.add(new Event(item.id, item.title.isEmpty() ? "제목 없음" : item.title, "", item.done));
                 } catch (Exception e) { d.routineError = "루틴 불러오기 실패 · 눌러 확인"; }
                 publish(c,m,ids,d,displayMonth);
-                d.care = loadLocalCareWeek(c, d.careStart);
-                try {
-                    Calendar end = (Calendar) d.careStart.clone(); end.add(Calendar.DAY_OF_MONTH, 7);
-                    SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
-                    Map<String, NotionClient.CareEntry> remoteCare = NotionClient.loadCareWeek(token, f.format(d.careStart.getTime()), f.format(end.getTime()));
-                    for (Map.Entry<String, NotionClient.CareEntry> e : remoteCare.entrySet()) {
-                        if (!c.getSharedPreferences("prefs", Context.MODE_PRIVATE).getBoolean("care_"+e.getKey()+"_pending",false)) { d.care.put(e.getKey(), e.getValue()); saveLocalCare(c, e.getValue()); }
-                    }
-                } catch (Exception e) { d.error="식단 연결 실패 · 앱에서 식단 확인"; }
+
             }
             lastDashboard = d; lastMonth = displayMonth;
             publish(c,m,ids,d,displayMonth);
@@ -111,7 +102,7 @@ public final class WidgetUpdater {
     }
 
     private static RemoteViews views(Context c, Dashboard d, Calendar displayMonth) {
-        RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget_stable);
+        RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget_calendar);
         Calendar now = Calendar.getInstance();
         int month = displayMonth.get(Calendar.MONTH) + 1;
         String monthTitle = displayMonth.get(Calendar.YEAR) == now.get(Calendar.YEAR) ? month + "월" : displayMonth.get(Calendar.YEAR) + "년 " + month + "월";
@@ -195,7 +186,6 @@ public final class WidgetUpdater {
         setSectionLink(c, v, R.id.wish_summary, "wishlist", 20);
         setSectionLink(c, v, R.id.money_summary, "bleeding", 21);
         v.setOnClickPendingIntent(R.id.packaging_summary, PendingIntent.getActivity(c, 23, notion, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
-        bindCareWeek(c, v, d);
         return v;
     }
 
@@ -232,73 +222,6 @@ public final class WidgetUpdater {
         int mondayDelta = day.get(Calendar.DAY_OF_WEEK) == Calendar.SUNDAY ? -6 : Calendar.MONDAY - day.get(Calendar.DAY_OF_WEEK);
         day.add(Calendar.DAY_OF_MONTH, mondayDelta + offset * 7);
         return day;
-    }
-
-    private static Map<String, NotionClient.CareEntry> loadLocalCareWeek(Context c, Calendar start) {
-        Map<String, NotionClient.CareEntry> out = new HashMap<>(); Calendar day = (Calendar) start.clone(); SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
-        android.content.SharedPreferences p = c.getSharedPreferences("prefs", Context.MODE_PRIVATE);
-        for (int i = 0; i < 7; i++) { String date = f.format(day.getTime()); NotionClient.CareEntry x = new NotionClient.CareEntry(); x.date=date; x.breakfast=p.getString("care_"+date+"_breakfast",""); x.lunch=p.getString("care_"+date+"_lunch",""); x.dinner=p.getString("care_"+date+"_dinner",""); x.snack=p.getString("care_"+date+"_snack",""); x.note=p.getString("care_"+date+"_note",""); if (!x.breakfast.trim().isEmpty()||!x.lunch.trim().isEmpty()||!x.dinner.trim().isEmpty()||!x.snack.trim().isEmpty()||!x.note.trim().isEmpty()) out.put(date,x); day.add(Calendar.DAY_OF_MONTH,1); }
-        return out;
-    }
-    private static void saveLocalCare(Context c, NotionClient.CareEntry x) {
-        c.getSharedPreferences("prefs", Context.MODE_PRIVATE).edit().putString("care_"+x.date+"_breakfast",x.breakfast).putString("care_"+x.date+"_lunch",x.lunch).putString("care_"+x.date+"_dinner",x.dinner).putString("care_"+x.date+"_snack",x.snack).putString("care_"+x.date+"_note",x.note).apply();
-    }
-
-    private static String compactMeal(NotionClient.CareEntry entry) {
-        String[][] fields = {
-                {"아", entry.breakfast}, {"점", entry.lunch},
-                {"저", entry.dinner}, {"간", entry.snack}
-        };
-        StringBuilder out = new StringBuilder();
-        int shown = 0;
-        for (String[] field : fields) {
-            String clean = field[1] == null ? "" : field[1].trim().replaceAll("\\s+", " ");
-            if (clean.isEmpty()) continue;
-            if (clean.length() > 7) clean = clean.substring(0, 7) + "…";
-            if (out.length() > 0) out.append("\n");
-            out.append(field[0]).append(" ").append(clean);
-            shown++;
-            if (shown == 2) break;
-        }
-        return out.toString();
-    }
-
-    private static void bindCareWeek(Context c, RemoteViews v, Dashboard d) {
-        Calendar day = (Calendar) d.careStart.clone();
-        int defaultDay = (Calendar.getInstance().get(Calendar.DAY_OF_WEEK)+5)%7;
-        int selected = Math.max(0,Math.min(6,c.getSharedPreferences("prefs",Context.MODE_PRIVATE).getInt("care_selected_day",defaultDay)));
-        day.add(Calendar.DAY_OF_MONTH,selected);
-        String date=new SimpleDateFormat("yyyy-MM-dd",Locale.US).format(day.getTime());
-        String today=new SimpleDateFormat("yyyy-MM-dd",Locale.US).format(new Date());
-        v.setTextViewText(R.id.care_title,new SimpleDateFormat("M월 d일 E요일",Locale.KOREAN).format(day.getTime())+(date.equals(today)?" · 오늘":""));
-        NotionClient.CareEntry entry=d.care.get(date);
-        int[] ids={R.id.meal_breakfast,R.id.meal_lunch,R.id.meal_dinner,R.id.meal_snack};
-        String[] labels={"아침","점심","저녁","간식"},fields={"breakfast","lunch","dinner","snack"};
-        String[] values=entry==null?new String[]{"","","",""}:new String[]{entry.breakfast,entry.lunch,entry.dinner,entry.snack};
-        for(int i=0;i<4;i++){
-            v.setTextViewText(ids[i],labels[i]+"　"+(values[i].trim().isEmpty()?"기록하기":values[i].trim().replaceAll("\\s+"," ")));
-            Intent edit=new Intent(c,MainActivity.class).setData(android.net.Uri.parse("hyeona://meal/"+date+"/"+fields[i])).putExtra("section","care").putExtra("care_date",date).putExtra("care_field",fields[i]);
-            v.setOnClickPendingIntent(ids[i],PendingIntent.getActivity(c,4300+i,edit,PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT));
-            v.setContentDescription(ids[i],date+" "+labels[i]+" 수정");
-        }
-        Intent prev=new Intent(c,WidgetProvider.class).setAction(WidgetProvider.ACTION_PREV_CARE_WEEK);
-        Intent next=new Intent(c,WidgetProvider.class).setAction(WidgetProvider.ACTION_NEXT_CARE_WEEK);
-        v.setOnClickPendingIntent(R.id.care_prev,PendingIntent.getBroadcast(c,30,prev,PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT));
-        v.setOnClickPendingIntent(R.id.care_next,PendingIntent.getBroadcast(c,31,next,PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT));
-    }
-
-    private static String careIcon(Date value, String startValue, String endValue, int cycle) {
-        try {
-            SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd", Locale.US); f.setLenient(false);
-            Date start = f.parse(startValue), end = f.parse(endValue); if (start == null || end == null || cycle < 21 || cycle > 45) return "";
-            long dayMs = 86400000L, delta = (value.getTime() - start.getTime()) / dayMs;
-            int periodDays = Math.max(1, (int)((end.getTime() - start.getTime()) / dayMs) + 1);
-            int day = (int)((delta % cycle + cycle) % cycle), ovulation = cycle - 14;
-            if (day < periodDays) return "🫧";
-            if (day < ovulation) return "💊";
-            if (day == ovulation) return "✦";
-            return "🍦";
-        } catch (Exception ignored) { return ""; }
     }
 
     private static List<Event> fetchMonth(String token, Calendar selectedMonth) throws Exception {
@@ -436,3 +359,4 @@ public final class WidgetUpdater {
         Event(String id, String title, String date, boolean done) { this.id = id; this.title = title; this.date = date; this.done = done; }
     }
 }
+

@@ -52,16 +52,4 @@
         <TextView android:id="@+id/money_summary" android:layout_width="0dp" android:layout_height="28dp" android:layout_weight="1" android:layout_marginLeft="3dp" android:layout_marginRight="3dp" android:background="@drawable/pill_blue" android:gravity="center" android:maxLines="1" android:ellipsize="end" android:text="◇ BLEEDING · 0" android:textSize="10sp" android:textColor="#6D8E98" />
         <TextView android:id="@+id/packaging_summary" android:layout_width="0dp" android:layout_height="28dp" android:layout_weight="1" android:layout_marginLeft="3dp" android:background="@drawable/pill_mint" android:gravity="center" android:maxLines="1" android:ellipsize="end" android:text="◇ PACKAGING" android:textSize="10sp" android:textColor="#678C87" />
     </LinearLayout>
-    <TextView android:layout_width="match_parent" android:layout_height="1dp" android:background="#80CDDEE2" />
-    <LinearLayout android:layout_width="match_parent" android:layout_height="196dp" android:orientation="vertical" android:layout_marginTop="3dp">
-        <LinearLayout android:layout_width="match_parent" android:layout_height="36dp" android:orientation="horizontal">
-            <TextView android:id="@+id/care_prev" android:layout_width="44dp" android:layout_height="match_parent" android:gravity="center" android:text="‹" android:textSize="24sp" android:contentDescription="전날 식단" android:textColor="#566A70" />
-            <TextView android:id="@+id/care_title" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="오늘 식단" android:textSize="13sp" android:textColor="#40545A" />
-            <TextView android:id="@+id/care_next" android:layout_width="44dp" android:layout_height="match_parent" android:gravity="center" android:text="›" android:textSize="24sp" android:contentDescription="다음날 식단" android:textColor="#566A70" />
-        </LinearLayout>
-        <TextView android:id="@+id/meal_breakfast" android:layout_width="match_parent" android:layout_height="40dp" android:gravity="center_vertical" android:paddingLeft="8dp" android:paddingRight="8dp" android:text="아침　기록하기" android:textSize="13sp" android:textColor="#40545A" android:maxLines="2" android:ellipsize="end" />
-        <TextView android:id="@+id/meal_lunch" android:layout_width="match_parent" android:layout_height="40dp" android:gravity="center_vertical" android:paddingLeft="8dp" android:paddingRight="8dp" android:text="점심　기록하기" android:textSize="13sp" android:textColor="#40545A" android:maxLines="2" android:ellipsize="end" />
-        <TextView android:id="@+id/meal_dinner" android:layout_width="match_parent" android:layout_height="40dp" android:gravity="center_vertical" android:paddingLeft="8dp" android:paddingRight="8dp" android:text="저녁　기록하기" android:textSize="13sp" android:textColor="#40545A" android:maxLines="2" android:ellipsize="end" />
-        <TextView android:id="@+id/meal_snack" android:layout_width="match_parent" android:layout_height="40dp" android:gravity="center_vertical" android:paddingLeft="8dp" android:paddingRight="8dp" android:text="간식　기록하기" android:textSize="13sp" android:textColor="#40545A" android:maxLines="2" android:ellipsize="end" />
-    </LinearLayout>
 </LinearLayout>

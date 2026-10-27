@@ -47,11 +47,12 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with: {path: installers}
-      - name: Publish 1.6.1 installers
+      - name: Publish 1.6.2 installers
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          cp installers/Hyeona-Widget-Android-APK/android-debug.apk installers/Hyeona-Widget-1.6.1.apk
-          gh release view v1.6.1-build29 || gh release create v1.6.1-build29 --target "$GITHUB_SHA" --title "1.6.1 build 29" --notes "Android widget fixed-layout recovery; Android 15 rendering validation."
-          gh release upload v1.6.1-build29 installers/Hyeona-Widget-1.6.1.apk installers/Hyeona-Widget-Windows-Installer/*.exe --clobber
+          cp installers/Hyeona-Widget-Android-APK/android-debug.apk installers/Hyeona-Widget-1.6.2.apk
+          gh release view v1.6.2-build30 || gh release create v1.6.2-build30 --target "$GITHUB_SHA" --title "1.6.2 build 30" --notes "Remove diet/care weekly panel from desktop dashboard and Android widget. Existing Notion records are preserved."
+          gh release upload v1.6.2-build30 installers/Hyeona-Widget-1.6.2.apk installers/Hyeona-Widget-Windows-Installer/*.exe --clobber
+

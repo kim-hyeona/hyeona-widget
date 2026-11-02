@@ -1,12 +1,15 @@
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="320dp"
     android:minHeight="600dp"
-    android:minResizeWidth="250dp"
-    android:minResizeHeight="500dp"
+    android:targetCellWidth="5"
+    android:targetCellHeight="6"
+    android:minResizeWidth="300dp"
+    android:minResizeHeight="520dp"
     android:updatePeriodMillis="1800000"
-    android:initialLayout="@layout/widget_calendar"
-    android:previewLayout="@layout/widget_calendar"
+    android:initialLayout="@layout/widget_readable"
+    android:previewLayout="@layout/widget_readable"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
     android:description="@string/widget_description" />
+
 

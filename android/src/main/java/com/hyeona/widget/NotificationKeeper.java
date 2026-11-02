@@ -18,31 +18,33 @@ final class NotificationKeeper {
     private static final String CHANNEL = "hyeona_pinned_dashboard";
     private static final int SCHEDULE_ID = 1200;
     private static final int TODO_ID = 1203;
+    static final int ROUTINE_ID=1204;
 
-    static void refresh(Context context) {
-        Context app = context.getApplicationContext();
-        createChannel(app);
-        post(app, SCHEDULE_ID, "오늘 일정", "일정을 불러오는 중이에요…");
-        post(app, TODO_ID, "오늘 할 일", "할 일을 불러오는 중이에요…");
-        Executors.newSingleThreadExecutor().execute(() -> {
-            String token = app.getSharedPreferences("prefs", Context.MODE_PRIVATE).getString("token", "");
-            if (token.isEmpty()) {
-                post(app, SCHEDULE_ID, "오늘 일정", "눌러서 Notion 토큰을 연결해 주세요");
-                post(app, TODO_ID, "오늘 할 일", "눌러서 Notion 토큰을 연결해 주세요");
-                return;
-            }
-            try { postSchedule(app, token); }
-            catch (Exception e) { post(app, SCHEDULE_ID, "오늘 일정", "Notion 캘린더 연결을 확인해 주세요"); }
-            try { postTodo(app, token); }
-            catch (Exception e) { post(app, TODO_ID, "오늘 할 일", "Notion 오늘 할 일 연결을 확인해 주세요"); }
-        });
+    static void refresh(Context c) {
+        createChannel(c);restoreRoutine(c);NotificationRefreshService.schedule(c);
     }
+    static void refreshNow(Context app) {
+        createChannel(app);String token=app.getSharedPreferences("prefs",0).getString("token","");
+        if(token.isEmpty()){post(app,ROUTINE_ID,"오늘 루틴","눌러서 Notion을 연결해 주세요");return;}
+        try{postRoutine(app,NotionClient.query(token,"routine"));}catch(Exception e){restoreRoutine(app);}
+        try{postSchedule(app,token);}catch(Exception ignored){}
+        try{postTodo(app,token);}catch(Exception ignored){}
+    }
+    static void postRoutine(Context c,List<NotionClient.Item> items){
+        int done=0;StringBuilder body=new StringBuilder();
+        for(NotionClient.Item item:items){if(item.done)done++;if(body.length()>0)body.append("\n");body.append(item.done?"✓ ":"○ ").append(item.title);}
+        String title="오늘 루틴 · "+done+"/"+items.size();
+        String content=items.isEmpty()?"등록된 루틴이 없어요 · 눌러서 추가":body.toString();
+        c.getSharedPreferences("prefs",0).edit().putString("routine_notification_title",title).putString("routine_notification_body",content).apply();
+        post(c,ROUTINE_ID,title,content);
+    }
+    static void restoreRoutine(Context c){android.content.SharedPreferences p=c.getSharedPreferences("prefs",0);post(c,ROUTINE_ID,p.getString("routine_notification_title","오늘 루틴"),p.getString("routine_notification_body","루틴을 불러오는 중 · 눌러서 확인"));}
 
     private static void postSchedule(Context app, String token) throws Exception {
         String today = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date());
         List<NotionClient.Item> all = NotionClient.query(token, "calendar");
         List<NotionClient.Item> items = new ArrayList<>();
-        for (NotionClient.Item item : all) if (today.equals(item.date)) items.add(item);
+        for (NotionClient.Item item : all) if (item.date.startsWith(today)) items.add(item);
         int done = 0; StringBuilder names = new StringBuilder();
         for (NotionClient.Item item : items) {
             if (item.done) done++;
@@ -67,15 +69,21 @@ final class NotificationKeeper {
 
     private static void createChannel(Context c) {
         if (Build.VERSION.SDK_INT >= 26) {
-            NotificationChannel channel = new NotificationChannel(CHANNEL, "고정 일정과 할 일", NotificationManager.IMPORTANCE_LOW);
-            channel.setDescription("일괄 지우기로 사라지지 않는 오늘 일정과 할 일");
+            NotificationChannel channel = new NotificationChannel(CHANNEL, "고정 일정·할 일·루틴", NotificationManager.IMPORTANCE_LOW);
+            channel.setDescription("오늘 일정과 할 일, 루틴을 알림창에 표시");
             channel.setShowBadge(false);
             c.getSystemService(NotificationManager.class).createNotificationChannel(channel);
         }
     }
 
     private static void post(Context c, int id, String title, String body) {
-        Intent open = new Intent(c, MainActivity.class).setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        if(Build.VERSION.SDK_INT>=33&&c.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)return;
+        createChannel(c);
+        NotificationManager manager=c.getSystemService(NotificationManager.class);if(!manager.areNotificationsEnabled())return;
+        manager.notify(id,build(c,id,title,body));
+    }
+    static Notification build(Context c,int id,String title,String body){
+        Intent open = new Intent(c, MainActivity.class).setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP).putExtra("section",id==ROUTINE_ID?"routine":id==TODO_ID?"todo":"calendar");
         PendingIntent openPi = PendingIntent.getActivity(c, id + 10, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         Intent refresh = new Intent(c, NotificationReceiver.class).setAction(NotificationReceiver.REFRESH);
         PendingIntent refreshPi = PendingIntent.getBroadcast(c, id + 20, refresh, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
@@ -83,8 +91,9 @@ final class NotificationKeeper {
         Notification n = b.setSmallIcon(android.R.drawable.ic_menu_today).setContentTitle(title).setContentText(body)
                 .setStyle(new Notification.BigTextStyle().bigText(body)).setContentIntent(openPi)
                 .addAction(new Notification.Action.Builder(null, "새로고침", refreshPi).build())
-                .setOngoing(true).setAutoCancel(false).setOnlyAlertOnce(true).setShowWhen(false).build();
+                .setVisibility(Notification.VISIBILITY_PRIVATE).setOngoing(true).setAutoCancel(false).setOnlyAlertOnce(true).setShowWhen(false).build();
         n.flags |= Notification.FLAG_NO_CLEAR | Notification.FLAG_ONGOING_EVENT;
-        ((NotificationManager)c.getSystemService(Context.NOTIFICATION_SERVICE)).notify(id, n);
+        return n;
     }
 }
+

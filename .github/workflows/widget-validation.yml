@@ -30,6 +30,13 @@ jobs:
             adb shell am instrument -w com.hyeona.widget.test/com.hyeona.widget.WidgetRenderInstrumentation > widget-render-result.txt
             cat widget-render-result.txt
             grep -q WIDGET_RENDER_OK widget-render-result.txt
+            adb exec-out run-as com.hyeona.widget cat files/widget-600.png > widget-600.png
+            adb exec-out run-as com.hyeona.widget cat files/widget-720.png > widget-720.png
       - uses: actions/upload-artifact@v4
         if: always()
-        with: {name: widget-render-result, path: widget-render-result.txt}
+        with:
+          name: widget-render-result
+          path: |
+            widget-render-result.txt
+            widget-*.png
+

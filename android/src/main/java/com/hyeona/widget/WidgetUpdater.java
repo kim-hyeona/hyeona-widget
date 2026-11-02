@@ -48,6 +48,7 @@ public final class WidgetUpdater {
         Calendar month=Calendar.getInstance();month.set(Calendar.DAY_OF_MONTH,1);month.add(Calendar.MONTH,c.getSharedPreferences("prefs",0).getInt("widget_month_offset",0));
         Dashboard cached=new Dashboard();cached.careStart=careWeekStart(c);restore(c,cached,month);publish(c,m,ids,cached,month);
         WidgetRefreshService.schedule(c);
+        NotificationRefreshService.ensurePeriodic(c);
     }
 
     static void runRefresh(Context c, Runnable finished) {
@@ -81,6 +82,7 @@ public final class WidgetUpdater {
                     List<NotionClient.Item> items=NotionClient.query(token,"routine");d.routines.clear();
                     for (NotionClient.Item item : items)
                         d.routines.add(new Event(item.id, item.title.isEmpty() ? "제목 없음" : item.title, "", item.done));
+                    NotificationKeeper.postRoutine(c,items);
                 } catch (Exception e) { d.routineError = "루틴 불러오기 실패 · 눌러 확인"; }
                 publish(c,m,ids,d,displayMonth);
 
@@ -92,24 +94,27 @@ public final class WidgetUpdater {
     }
 
     private static String cacheKey(Calendar month){return "widget_cache_"+month.get(Calendar.YEAR)+"_"+month.get(Calendar.MONTH);}
-    private static JSONArray encode(List<Event> items)throws Exception{JSONArray out=new JSONArray();for(Event e:items)out.put(new JSONObject().put("id",e.id).put("title",e.title).put("date",e.date).put("done",e.done));return out;}
-    private static List<Event> decode(JSONArray a)throws Exception{List<Event> out=new ArrayList<>();if(a!=null)for(int i=0;i<a.length();i++){JSONObject x=a.getJSONObject(i);out.add(new Event(x.optString("id"),x.optString("title"),x.optString("date"),x.optBoolean("done")));}return out;}
+    private static JSONArray encode(List<Event> items)throws Exception{JSONArray out=new JSONArray();for(Event e:items)out.put(new JSONObject().put("id",e.id).put("title",e.title).put("date",e.date).put("done",e.done).put("color",e.color));return out;}
+    private static List<Event> decode(JSONArray a)throws Exception{List<Event> out=new ArrayList<>();if(a!=null)for(int i=0;i<a.length();i++){JSONObject x=a.getJSONObject(i);out.add(new Event(x.optString("id"),x.optString("title"),x.optString("date"),x.optBoolean("done"),x.optString("color","기본")));}return out;}
     private static void restore(Context c,Dashboard d,Calendar month){try{JSONObject x=new JSONObject(c.getSharedPreferences("prefs",0).getString(cacheKey(month),"{}"));d.events=decode(x.optJSONArray("events"));d.todos=decode(x.optJSONArray("todos"));d.memos=decode(x.optJSONArray("memos"));d.routines=decode(x.optJSONArray("routines"));d.money=x.optString("money");d.wishes=x.optInt("wishes");}catch(Exception ignored){}}
     private static void publish(Context c,AppWidgetManager m,int[] ids,Dashboard d,Calendar month){
         lastDashboard=d;lastMonth=month;
-        for(int id:ids)m.updateAppWidget(id,views(c,d,month));
+        for(int id:ids)m.updateAppWidget(id,views(c,d,month,m.getAppWidgetOptions(id).getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT,700)));
         try{JSONObject x=new JSONObject().put("events",encode(d.events)).put("todos",encode(d.todos)).put("memos",encode(d.memos)).put("routines",encode(d.routines)).put("money",d.money).put("wishes",d.wishes);c.getSharedPreferences("prefs",0).edit().putString(cacheKey(month),x.toString()).apply();}catch(Exception ignored){}
     }
 
-    private static RemoteViews views(Context c, Dashboard d, Calendar displayMonth) {
-        RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget_calendar);
+    private static RemoteViews views(Context c, Dashboard d, Calendar displayMonth) {return views(c,d,displayMonth,700);}
+    private static RemoteViews views(Context c, Dashboard d, Calendar displayMonth,int heightDp) {
+        boolean compact=heightDp<620;
+        int routineLimit=compact?4:6;
+        RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget_readable);
         Calendar now = Calendar.getInstance();
         int month = displayMonth.get(Calendar.MONTH) + 1;
         String monthTitle = displayMonth.get(Calendar.YEAR) == now.get(Calendar.YEAR) ? month + "월" : displayMonth.get(Calendar.YEAR) + "년 " + month + "월";
         v.setTextViewText(R.id.month_title, monthTitle);
         Intent jumpToday = new Intent(c, WidgetProvider.class).setAction(WidgetProvider.ACTION_TODAY);
         v.setOnClickPendingIntent(R.id.today_button, PendingIntent.getBroadcast(c, 6, jumpToday, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
-        v.setTextViewText(R.id.calendar_hint, d.error.isEmpty() ? "날짜 칸을 누르면 일정 추가" : d.error);
+        v.setTextViewText(R.id.calendar_hint, d.error.isEmpty() ? "빈 날짜: 추가 · 일정: 수정" : d.error);
 
         Intent open = new Intent(c, MainActivity.class);
         PendingIntent openPi = PendingIntent.getActivity(c, 1, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
@@ -155,27 +160,39 @@ public final class WidgetUpdater {
                 v.setTextColor(numberId, color);
                 v.setInt(numberId, "setBackgroundColor", key.equals(todayKey)?Color.rgb(29,36,40):Color.TRANSPARENT);
                 List<Event> events = byDate.get(key);
-                StringBuilder names = new StringBuilder();
-                if (events != null && inMonth) {
-                    for (int i = 0; i < events.size() && i < 2; i++) {
-                        if (i > 0) names.append(" · ");
-                        names.append(events.get(i).title);
+                int secondId=viewId(c,"day_event_second_"+index);
+                int count=events!=null&&inMonth?events.size():0;
+                int[] chips={eventId,secondId};
+                int shown=compact?1:2;
+                for(int n=0;n<2;n++){
+                    int chip=chips[n];v.setViewVisibility(chip,n<count&&n<shown?View.VISIBLE:View.GONE);
+                    v.setTextViewText(chip,"");v.setInt(chip,"setBackgroundColor",Color.TRANSPARENT);v.setOnClickPendingIntent(chip,addPi);
+                    if(n<count){Event event=events.get(n);String label=event.title+(n==shown-1&&count>shown?" +"+(count-shown):"");
+                        v.setTextViewText(chip,label);v.setTextColor(chip,EventColors.foreground(event.color));v.setInt(chip,"setBackgroundColor",EventColors.background(event.color));
+                        v.setContentDescription(chip,event.title+" · "+event.color+" · 수정");
+                        Intent edit=new Intent(c,MainActivity.class).setData(android.net.Uri.parse("hyeona://event/"+event.id)).putExtra("section","calendar").putExtra("calendar_date",key).putExtra("event_id",event.id);
+                        v.setOnClickPendingIntent(chip,PendingIntent.getActivity(c,6000,edit,PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT));
                     }
-                    if (events.size() > 2) names.append(" +").append(events.size() - 2);
                 }
-                v.setTextViewText(eventId, names.toString());
-                v.setViewVisibility(eventId, names.length() == 0 ? View.INVISIBLE : View.VISIBLE);
 
                 grid.add(Calendar.DAY_OF_MONTH, 1);
             }
         }
 
-        v.setTextViewText(R.id.today_title, "TODAY · " + today.size());
+        v.setTextViewText(R.id.today_title, "할 일 · " + today.size());
         int routineDone = 0; for (Event item : d.routines) if (item.done) routineDone++;
-        v.setTextViewText(R.id.routine_title, "ROUTINE · " + routineDone + "/" + d.routines.size());
+        v.setTextViewText(R.id.routine_title, "루틴 · " + routineDone + "/" + d.routines.size());
         bindCheckList(c, v, R.id.today_list, today, 100);
         bindTextList(c, v, R.id.memo_list, d.memos, "메모가 없어요");
-        bindCheckList(c, v, R.id.routine_list, d.routines, 200);
+        List<Event> sortedRoutines=new ArrayList<>(d.routines);java.util.Collections.sort(sortedRoutines,(a,b)->Boolean.compare(a.done,b.done));
+        bindCheckList(c, v, R.id.routine_list, sortedRoutines, 200);
+        v.setTextViewText(R.id.memo_title,"메모 · "+d.memos.size());
+        v.setTextViewText(R.id.memo_more,d.memos.size()>5?"+"+(d.memos.size()-5)+"개 · 전체 보기 ›":"전체 보기 ›");
+        v.setTextViewText(R.id.routine_more,d.routines.size()>6?"+"+(d.routines.size()-6)+"개 · 전체 보기 ›":"전체 보기 ›");
+        setSectionLink(c,v,R.id.memo_title,"memo",41);setSectionLink(c,v,R.id.memo_more,"memo",42);
+        setSectionLink(c,v,R.id.routine_title,"routine",43);setSectionLink(c,v,R.id.routine_more,"routine",44);
+        if(compact){for(int i=4;i<6;i++)v.setViewVisibility(viewId(c,"routine_row_"+i),View.GONE);}
+        v.setTextViewText(R.id.routine_more,d.routines.size()>routineLimit?"+"+(d.routines.size()-routineLimit)+"개 · 전체 보기 ›":"전체 보기 ›");
         if (!d.routineError.isEmpty()) bindTextList(c, v, R.id.routine_list, new ArrayList<>(), d.routineError);
         setSectionLink(c, v, R.id.today_list, "todo", 10);
         setSectionLink(c, v, R.id.memo_list, "memo", 11);
@@ -192,21 +209,22 @@ public final class WidgetUpdater {
     private static int viewId(Context c,String name){return c.getResources().getIdentifier(name,"id",c.getPackageName());}
     private static String listName(int container){return container==R.id.today_list?"today":container==R.id.memo_list?"memo":"routine";}
     private static void bindCheckList(Context c,RemoteViews v,int container,List<Event> items,int requestBase){
-        String name=listName(container);int count=Math.min(5,items.size());
-        for(int i=0;i<5;i++){
+        String name=listName(container);int limit=name.equals("today")?2:name.equals("routine")?6:5;int count=Math.min(limit,items.size());
+        for(int i=0;i<limit;i++){
             int row=viewId(c,name+"_row_"+i),check=viewId(c,name+"_check_"+i),text=viewId(c,name+"_text_"+i);
             v.setViewVisibility(row,i<Math.max(1,count)?View.VISIBLE:View.GONE);
             v.setViewVisibility(check,i<count?View.VISIBLE:View.GONE);
             v.setTextViewText(text,i<count?items.get(i).title:(i==0?"· 비어 있어요":""));
-            v.setOnClickPendingIntent(check,null);
+            v.setOnClickPendingIntent(check,null);setSectionLink(c,v,text,name.equals("today")?"todo":name,700+requestBase+i);
             if(i<count){Event item=items.get(i);v.setTextViewText(check,item.done?"✓":"○");Intent toggle=new Intent(c,WidgetProvider.class).setAction(WidgetProvider.ACTION_TOGGLE).putExtra("page",item.id).putExtra("done",item.done);v.setOnClickPendingIntent(check,PendingIntent.getBroadcast(c,requestBase+i,toggle,PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT));}
         }
     }
     private static void bindTextList(Context c,RemoteViews v,int container,List<Event> items,String empty){
-        String name=listName(container);int count=Math.min(5,items.size());
-        for(int i=0;i<5;i++){
+        String name=listName(container);int limit=name.equals("today")?2:name.equals("routine")?6:5;int count=Math.min(limit,items.size());
+        for(int i=0;i<limit;i++){
             v.setViewVisibility(viewId(c,name+"_row_"+i),i<Math.max(1,count)?View.VISIBLE:View.GONE);
             v.setViewVisibility(viewId(c,name+"_check_"+i),View.GONE);
+            setSectionLink(c,v,viewId(c,name+"_text_"+i),name,800+i);
             v.setTextViewText(viewId(c,name+"_text_"+i),i<count?"· "+items.get(i).title:(i==0?"· "+empty:""));
         }
     }
@@ -233,7 +251,7 @@ public final class WidgetUpdater {
                 .put(new JSONObject().put("property", "날짜").put("date", new JSONObject().put("on_or_after", f.format(start.getTime()))))
                 .put(new JSONObject().put("property", "날짜").put("date", new JSONObject().put("before", f.format(end.getTime())))));
         JSONObject body = new JSONObject().put("page_size", 100).put("filter", date);
-        JSONArray results = request(token, "POST", "https://api.notion.com/v1/databases/" + CALENDAR_DB + "/query", body).getJSONArray("results");
+        JSONArray results=new JSONArray();boolean more;do{JSONObject page=request(token,"POST","https://api.notion.com/v1/databases/"+CALENDAR_DB+"/query",body);JSONArray rows=page.getJSONArray("results");for(int k=0;k<rows.length();k++)results.put(rows.get(k));more=page.optBoolean("has_more");if(more)body.put("start_cursor",page.getString("next_cursor"));}while(more);
         List<Event> out = new ArrayList<>();
         for (int i = 0; i < results.length(); i++) {
             JSONObject p = results.getJSONObject(i), props = p.getJSONObject("properties");
@@ -242,7 +260,7 @@ public final class WidgetUpdater {
             if (title.length() == 0 || dateObj == null) continue;
             String dateValue = dateObj.optString("start", "");
             if (dateValue.length() >= 10) dateValue = dateValue.substring(0, 10);
-            out.add(new Event(p.getString("id"), title.getJSONObject(0).optString("plain_text", "할 일"), dateValue, (props.optJSONObject("완료") != null && props.optJSONObject("완료").optBoolean("checkbox"))));
+            out.add(new Event(p.getString("id"), title.getJSONObject(0).optString("plain_text", "할 일"), dateValue, (props.optJSONObject("완료") != null && props.optJSONObject("완료").optBoolean("checkbox")),EventColors.read(props)));
         }
         return out;
     }
@@ -355,8 +373,10 @@ public final class WidgetUpdater {
         List<Event> events = new ArrayList<>(), todos = new ArrayList<>(), memos = new ArrayList<>(), routines = new ArrayList<>(); String error = "", money = "", brain = ""; int wishes = 0;
     }
     private static final class Event {
-        final String id, title, date; final boolean done;
-        Event(String id, String title, String date, boolean done) { this.id = id; this.title = title; this.date = date; this.done = done; }
+        final String id, title, date, color; final boolean done;
+        Event(String id, String title, String date, boolean done) { this(id,title,date,done,"기본"); }
+        Event(String id,String title,String date,boolean done,String color){this.id=id;this.title=title;this.date=date;this.done=done;this.color=color; }
     }
 }
+
 

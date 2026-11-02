@@ -14,6 +14,7 @@ public class WidgetProvider extends AppWidgetProvider {
     public static final String ACTION_NEXT_MONTH = "com.hyeona.widget.NEXT_MONTH";
     public static final String ACTION_PREV_CARE_WEEK = "com.hyeona.widget.PREV_CARE_WEEK";
     public static final String ACTION_NEXT_CARE_WEEK = "com.hyeona.widget.NEXT_CARE_WEEK";
+    @Override public void onAppWidgetOptionsChanged(Context c,AppWidgetManager m,int id,android.os.Bundle options){WidgetUpdater.update(c,m,new int[]{id});}
     @Override public void onUpdate(Context c, AppWidgetManager m, int[] ids) { WidgetUpdater.update(c, m, ids); }
     @Override public void onReceive(Context c, Intent i) {
         super.onReceive(c, i);
@@ -27,3 +28,4 @@ public class WidgetProvider extends AppWidgetProvider {
         if (ACTION_NEXT_CARE_WEEK.equals(i.getAction())) WidgetUpdater.moveCareWeek(c, 1);
     }
 }
+

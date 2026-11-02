@@ -22,6 +22,8 @@ public class WidgetRenderInstrumentation extends Instrumentation {
    if(populated==1){for(String name:new String[]{"events","todos","memos","routines"}){Field f=dashboard.getDeclaredField(name);f.setAccessible(true);List items=(List)f.get(d);for(int i=0;i<8;i++)items.add(ec.newInstance("test-"+i,name.equals("routines")?"네트워크 진도나가기":"브런치 카페 약속",new java.text.SimpleDateFormat("yyyy-MM-dd",Locale.US).format(month.getTime()),i<2,EventColors.NAMES[i%7]));}}
    RemoteViews original=(RemoteViews)render.invoke(null,c,d,month,height);Parcel parcel=Parcel.obtain();original.writeToParcel(parcel,0);parcel.setDataPosition(0);RemoteViews remote=RemoteViews.CREATOR.createFromParcel(parcel);parcel.recycle();
    FrameLayout parent=new FrameLayout(c);View view=remote.apply(c,parent);remote.reapply(c,view);int widthPx=(int)(384*density),heightPx=(int)(height*density);view.measure(View.MeasureSpec.makeMeasureSpec(widthPx,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(heightPx,View.MeasureSpec.EXACTLY));view.layout(0,0,widthPx,heightPx);
+   View todayPanel=(View)view.findViewById(R.id.today_list).getParent(),memoPanel=(View)view.findViewById(R.id.memo_list).getParent(),routinePanel=(View)view.findViewById(R.id.routine_list).getParent();
+   if(todayPanel.getParent()!=memoPanel.getParent()||memoPanel.getParent()!=routinePanel.getParent()||todayPanel.getLeft()>=memoPanel.getLeft()||memoPanel.getLeft()>=routinePanel.getLeft()||todayPanel.getTop()!=routinePanel.getTop())throw new AssertionError("Three-column layout not restored");
    if(previous!=null)remote.reapply(c,previous);previous=view;
    android.appwidget.AppWidgetHostView host=new android.appwidget.AppWidgetHostView(c);for(android.appwidget.AppWidgetProviderInfo info:android.appwidget.AppWidgetManager.getInstance(c).getInstalledProviders())if(info.provider.getPackageName().equals(c.getPackageName())){host.setAppWidget(100,info);break;}host.updateAppWidget(remote);if(host.findViewById(R.id.day_cell_0)==null)throw new AssertionError("Host entered error view");
    int meal=c.getResources().getIdentifier("meal_breakfast","id",c.getPackageName());if(meal!=0&&view.findViewById(meal)!=null)throw new AssertionError("Unexpected meal panel");
@@ -46,3 +48,4 @@ public class WidgetRenderInstrumentation extends Instrumentation {
   if(!n.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString().contains("○ 준비"))throw new AssertionError("Routine list missing");
  }
 }
+

@@ -107,7 +107,7 @@ public final class WidgetUpdater {
     private static RemoteViews views(Context c, Dashboard d, Calendar displayMonth,int heightDp) {
         boolean compact=heightDp<620;
         int routineLimit=compact?4:6;
-        RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget_readable);
+        RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget_three_columns);
         Calendar now = Calendar.getInstance();
         int month = displayMonth.get(Calendar.MONTH) + 1;
         String monthTitle = displayMonth.get(Calendar.YEAR) == now.get(Calendar.YEAR) ? month + "월" : displayMonth.get(Calendar.YEAR) + "년 " + month + "월";
@@ -191,7 +191,7 @@ public final class WidgetUpdater {
         v.setTextViewText(R.id.routine_more,d.routines.size()>6?"+"+(d.routines.size()-6)+"개 · 전체 보기 ›":"전체 보기 ›");
         setSectionLink(c,v,R.id.memo_title,"memo",41);setSectionLink(c,v,R.id.memo_more,"memo",42);
         setSectionLink(c,v,R.id.routine_title,"routine",43);setSectionLink(c,v,R.id.routine_more,"routine",44);
-        if(compact){for(int i=4;i<6;i++)v.setViewVisibility(viewId(c,"routine_row_"+i),View.GONE);}
+        if(compact){for(String name:new String[]{"today","memo"})for(int i=3;i<5;i++)v.setViewVisibility(viewId(c,name+"_row_"+i),View.GONE);v.setTextViewText(R.id.memo_more,d.memos.size()>3?"+"+(d.memos.size()-3)+"개 · 전체 보기 ›":"전체 보기 ›");for(int i=4;i<6;i++)v.setViewVisibility(viewId(c,"routine_row_"+i),View.GONE);}
         v.setTextViewText(R.id.routine_more,d.routines.size()>routineLimit?"+"+(d.routines.size()-routineLimit)+"개 · 전체 보기 ›":"전체 보기 ›");
         if (!d.routineError.isEmpty()) bindTextList(c, v, R.id.routine_list, new ArrayList<>(), d.routineError);
         setSectionLink(c, v, R.id.today_list, "todo", 10);
@@ -209,7 +209,7 @@ public final class WidgetUpdater {
     private static int viewId(Context c,String name){return c.getResources().getIdentifier(name,"id",c.getPackageName());}
     private static String listName(int container){return container==R.id.today_list?"today":container==R.id.memo_list?"memo":"routine";}
     private static void bindCheckList(Context c,RemoteViews v,int container,List<Event> items,int requestBase){
-        String name=listName(container);int limit=name.equals("today")?2:name.equals("routine")?6:5;int count=Math.min(limit,items.size());
+        String name=listName(container);int limit=name.equals("routine")?6:5;int count=Math.min(limit,items.size());
         for(int i=0;i<limit;i++){
             int row=viewId(c,name+"_row_"+i),check=viewId(c,name+"_check_"+i),text=viewId(c,name+"_text_"+i);
             v.setViewVisibility(row,i<Math.max(1,count)?View.VISIBLE:View.GONE);
@@ -220,7 +220,7 @@ public final class WidgetUpdater {
         }
     }
     private static void bindTextList(Context c,RemoteViews v,int container,List<Event> items,String empty){
-        String name=listName(container);int limit=name.equals("today")?2:name.equals("routine")?6:5;int count=Math.min(limit,items.size());
+        String name=listName(container);int limit=name.equals("routine")?6:5;int count=Math.min(limit,items.size());
         for(int i=0;i<limit;i++){
             v.setViewVisibility(viewId(c,name+"_row_"+i),i<Math.max(1,count)?View.VISIBLE:View.GONE);
             v.setViewVisibility(viewId(c,name+"_check_"+i),View.GONE);
@@ -378,5 +378,6 @@ public final class WidgetUpdater {
         Event(String id,String title,String date,boolean done,String color){this.id=id;this.title=title;this.date=date;this.done=done;this.color=color; }
     }
 }
+
 
 

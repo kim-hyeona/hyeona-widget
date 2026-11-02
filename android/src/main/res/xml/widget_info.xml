@@ -6,10 +6,11 @@
     android:minResizeWidth="300dp"
     android:minResizeHeight="520dp"
     android:updatePeriodMillis="1800000"
-    android:initialLayout="@layout/widget_readable"
-    android:previewLayout="@layout/widget_readable"
+    android:initialLayout="@layout/widget_three_columns"
+    android:previewLayout="@layout/widget_three_columns"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
     android:description="@string/widget_description" />
+
 
 

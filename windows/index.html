@@ -919,6 +919,19 @@ function useCurrentLocation() {
   }, { enableHighAccuracy:false, timeout:8000, maximumAge:3600000 });
 }
 
+const calendarColors = {
+  '핑크':['#FCF0F4','#806872'], '보라':['#F3EFF9','#756C85'],
+  '파랑':['#EDF5FA','#627B88'], '민트':['#EDF7F1','#687F72'],
+  '주황':['#FCF0EB','#8A6D63'], '노랑':['#FAF7E9','#82795C']
+};
+function eventPalette(item) {
+  const automatic = /라포즈/.test(item.title) ? '주황' : /카미야|진담|모델라인|테이트|성형|네일|미용실|실밥/.test(item.title) ? '핑크' : '파랑';
+  return calendarColors[item.color] || calendarColors[automatic];
+}
+function colorSelect(attribute, value = '') {
+  const names = {'':'자동', '주황':'코랄 · 라포즈', '핑크':'핑크 · 미용', '파랑':'하늘색 · 친구', '보라':'라벤더', '민트':'민트', '노랑':'크림 옐로'};
+  return '<select class="field" aria-label="일정 색상" ' + attribute + '>' + Object.entries(names).map(([key,label]) => '<option value="' + key + '"' + (key === value ? ' selected' : '') + '>' + label + '</option>').join('') + '</select>';
+}
 function renderCalendar(data) {
   byId('month-label').textContent = data.monthLabel;
   let html = DOW.map((name) => '<div class="cal-dow">' + name + '</div>').join('');
@@ -927,7 +940,7 @@ function renderCalendar(data) {
     html += '<div class="day-number">' + day.day + '</div>';
     (day.events || []).slice(0,3).forEach((event) => {
       html += '<div class="cal-event' + (event.done ? ' done' : '') + '" data-event-id="' +
-        escapeHtml(event.id) + '">' + (event.done ? '✓ ' : '') + escapeHtml(event.title) + '</div>';
+        escapeHtml(event.id) + '"' + (' style="background:' + eventPalette(event)[0] + ';color:' + eventPalette(event)[1] + '"') + '>' + (event.done ? '✓ ' : '') + escapeHtml(event.title) + '</div>';
     });
     if ((day.events || []).length > 3) {
       html += '<div class="cal-event">+' + (day.events.length - 3) + '개 더</div>';
@@ -988,7 +1001,7 @@ function renderTasks(items) {
     list.innerHTML = '<div class="empty">오늘 할 일이 없어요 ♡</div>';
     return;
   }
-  items.forEach((item) => list.appendChild(checkRow(item,'todo')));
+  items.forEach((item) => list.appendChild(checkRow(item,'calendar')));
 }
 
 function renderRoutine(routine) {
@@ -1086,7 +1099,7 @@ function formFields(type, item) {
     escapeHtml(current.title || '') + '">';
   if (type === 'calendar') {
     html += '<input class="field" name="date" type="date" value="' +
-      escapeHtml(current.date || localDateString(new Date())) + '"><span></span>';
+      escapeHtml(current.date || localDateString(new Date())) + '">' + colorSelect('name="color"',current.color);
   } else if (type === 'bleeding') {
     html += '<input class="field" name="amount" type="number" step="0.1" placeholder="금액(만원)" value="' +
       (current.amount == null ? '' : current.amount) + '">';
@@ -1105,6 +1118,7 @@ function collectPayload(type, form) {
   const payload = { title:formData.get('title') || '' };
   if (type === 'calendar') {
     payload.date = formData.get('date');
+    payload.color = formData.get('color') || '';
     payload.done = false;
   }
   if (type === 'routine' || type === 'todo') payload.done = false;
@@ -1120,7 +1134,7 @@ function collectPayload(type, form) {
 
 function rowField(type, item) {
   if (type === 'calendar') {
-    return '<input class="field" data-field="date" type="date" value="' + escapeHtml(item.date || '') + '"><span></span>';
+    return '<input class="field" data-field="date" type="date" value="' + escapeHtml(item.date || '') + '">' + colorSelect('data-field="color"',item.color);
   }
   if (type === 'bleeding') {
     return '<input class="field" data-field="amount" type="number" step="0.1" value="' + (item.amount || 0) + '">' +
@@ -1275,7 +1289,7 @@ byId('location-button').onclick = useCurrentLocation;
 byId('bleeding-card').onclick = () => openEditor('bleeding');
 byId('wishlist-card').onclick = () => openEditor('wishlist');
 byId('calendar-add').onclick = () => openEditor('calendar');
-byId('today-add').onclick = () => openEditor('todo');
+byId('today-add').onclick = () => { openEditor('calendar'); byId('editor-form').elements.date.value = localDateString(new Date()); };
 byId('routine-add').onclick = () => openEditor('routine');
 byId('memo-add').onclick = () => openEditor('memo');
 byId('grind-button').onclick = () => state.data && window.hyeona.openLink(state.data.links.grind);
@@ -1345,5 +1359,6 @@ state.weatherTimer = setInterval(initWeather,1200000);
 </script>
 </body>
 </html>
+
 
 

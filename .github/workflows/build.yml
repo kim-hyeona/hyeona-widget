@@ -40,21 +40,17 @@ jobs:
     uses: ./.github/workflows/widget-validation.yml
 
   publish:
-    needs: [android, windows, render]
+    needs: [windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/download-artifact@v4
-        with: {path: installers}
-      - name: Publish Android 1.6.4 installer
+        with: {name: Hyeona-Widget-Windows-Installer, path: installers}
+      - name: Publish Windows 1.6.6
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          cp installers/Hyeona-Widget-Android-APK/android-debug.apk installers/Hyeona-Widget-1.6.4.apk
-          gh release view v1.6.4-build32 || gh release create v1.6.4-build32 --target "$GITHUB_SHA" --title "1.6.4 build 32" --notes "Restore original Today, Memo, Routine three-column layout and decorations. Keep larger text, event colors, 5x6 sizing and routine notification."
-          gh release upload v1.6.4-build32 installers/Hyeona-Widget-1.6.4.apk --clobber
-
-
-
+          gh release view windows-v1.6.6 || gh release create windows-v1.6.6 --target "$GITHUB_SHA" --title "Windows 1.6.6" --notes "Pastel calendar colors, today-only calendar tasks, daily routine reset in Korean time, and reliable timed event sync."
+          gh release upload windows-v1.6.6 installers/*.exe --clobber

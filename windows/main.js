@@ -50,6 +50,27 @@ async function notion(token, route, method = 'GET', body) {
   return data;
 }
 
+function calendarDate(value) {
+  if (!value) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(date);
+  const get = type => parts.find(part => part.type === type).value;
+  return get('year') + '-' + get('month') + '-' + get('day');
+}
+
+async function queryAll(token, databaseId, body) {
+  const results = [];
+  let cursor;
+  do {
+    const page = await notion(token, 'databases/' + databaseId + '/query', 'POST', {...body, ...(cursor ? {start_cursor:cursor} : {})});
+    results.push(...(page.results || []));
+    cursor = page.has_more ? page.next_cursor : null;
+  } while (cursor);
+  return {results};
+}
+
 function plainTitle(prop) {
   return (prop && prop.title || []).map((x) => x.plain_text).join('') || '';
 }
@@ -163,22 +184,47 @@ async function safeLoad(errors, label, fn, fallback) {
   }
 }
 
+let routineRefresh;
+async function dailyRoutines(token) {
+  if (routineRefresh) return routineRefresh;
+  routineRefresh = (async () => {
+    const today = calendarDate(new Date().toISOString());
+    const data = await queryAll(token, ROUTINE_DB, {page_size:100});
+    const settings = loadSettings();
+    if (settings.routineDate && settings.routineDate !== today) {
+      for (const page of data.results) {
+        if (!page.properties?.['완료']?.checkbox) continue;
+        await notion(token, 'pages/' + page.id, 'PATCH', {properties:{완료:{checkbox:false}}});
+        page.properties['완료'].checkbox = false;
+      }
+    }
+    if (settings.routineDate !== today) mergeSettings({routineDate:today});
+    return data;
+  })();
+  try { return await routineRefresh; } finally { routineRefresh = null; }
+}
+
+function calendarEvent(p) {
+  return {id:p.id,title:pageTitle(p) || '할 일',done:!!p.properties?.['완료']?.checkbox,
+    date:calendarDate(p.properties?.['날짜']?.date?.start),color:p.properties?.['일정 색상']?.select?.name || ''};
+}
+
 ipcMain.handle('dashboard:load', async (_event, token, offsetWeeks = 0) => {
   const days = twoWeekRange(offsetWeeks);
   const rangeStart = ymd(days[0]);
   const rangeEnd = ymd(days[13]);
-  const todayStr = ymd(new Date());
+  const todayStr = calendarDate(new Date().toISOString());
   const monthLabel = String(days[7].getMonth() + 1) + '월';
   const budgetMonth = String(new Date().getMonth() + 1) + '월';
   const errors = [];
 
   const results = await Promise.all([
-    safeLoad(errors, '캘린더', () => notion(token, 'databases/' + CALENDAR_DB + '/query', 'POST', {
+    safeLoad(errors, '캘린더', () => queryAll(token, CALENDAR_DB, {
       page_size: 100,
       filter: {
         and: [
-          { property: '날짜', date: { on_or_after: rangeStart } },
-          { property: '날짜', date: { on_or_before: rangeEnd } },
+          { property: '날짜', date: { on_or_after: rangeStart + 'T00:00:00+09:00' } },
+          { property: '날짜', date: { on_or_before: rangeEnd + 'T23:59:59.999+09:00' } },
         ],
       },
     }), { results: [] }),
@@ -193,14 +239,9 @@ ipcMain.handle('dashboard:load', async (_event, token, offsetWeeks = 0) => {
       page_size: 50,
       sorts: [{ timestamp: 'created_time', direction: 'descending' }],
     }), { results: [] }),
-    safeLoad(errors, '평일 루틴', () => notion(token, 'databases/' + ROUTINE_DB + '/query', 'POST', {
-      page_size: 50,
-    }), { results: [] }),
+    safeLoad(errors, '평일 루틴', () => dailyRoutines(token), { results: [] }),
     safeLoad(errors, '브레인덤프', () => notion(token, 'pages/' + BRAINDUMP_PAGE), { properties: {} }),
-    safeLoad(errors, '오늘 할 일', () => notion(token, 'databases/' + TODO_DB + '/query', 'POST', {
-      page_size: 100,
-      sorts: [{ timestamp: 'last_edited_time', direction: 'descending' }],
-    }), { results: [] }),
+    safeLoad(errors, '오늘 일정', () => queryAll(token, CALENDAR_DB, {page_size:100,filter:{and:[{property:'날짜',date:{on_or_after:todayStr+'T00:00:00+09:00'}},{property:'날짜',date:{on_or_before:todayStr+'T23:59:59.999+09:00'}}]}}), {results:[]}),
   ]);
 
   const calRes = results[0];
@@ -211,12 +252,7 @@ ipcMain.handle('dashboard:load', async (_event, token, offsetWeeks = 0) => {
   const dumpRes = results[5];
   const todoRes = results[6];
 
-  const events = calRes.results.map((p) => ({
-    id: p.id,
-    title: plainTitle(p.properties['이름']) || '할 일',
-    done: !!(p.properties['완료'] && p.properties['완료'].checkbox),
-    date: p.properties['날짜'] && p.properties['날짜'].date ? p.properties['날짜'].date.start : '',
-  }));
+  const events = calRes.results.map(calendarEvent);
 
   const calendarDays = days.map((d) => {
     const date = ymd(d);
@@ -260,11 +296,7 @@ ipcMain.handle('dashboard:load', async (_event, token, offsetWeeks = 0) => {
     done: !!(p.properties['완료'] && p.properties['완료'].checkbox),
   }));
 
-  const todo = todoRes.results.map((p) => ({
-    id: p.id,
-    title: pageTitle(p) || '할 일',
-    done: !!(p.properties['완료'] && p.properties['완료'].checkbox),
-  }));
+  const todo = todoRes.results.map(calendarEvent).filter(item => item.date === todayStr);
 
   const remoteBrainDump = plainText(dumpRes.properties && dumpRes.properties['내용']);
   const settings = loadSettings();
@@ -339,6 +371,7 @@ ipcMain.handle('task:toggle', async (_event, token, id, done) => {
 });
 
 ipcMain.handle('routine:toggle', async (_event, token, id, done) => {
+  await dailyRoutines(token);
   await notion(token, 'pages/' + id, 'PATCH', { properties: { 완료: { checkbox: done } } });
   return true;
 });
@@ -394,6 +427,11 @@ async function itemProperties(token, type, payload, partial = false) {
   if (payload.done !== undefined && ['calendar', 'bleeding', 'routine', 'todo'].includes(type)) {
     props['완료'] = { checkbox: !!payload.done };
   }
+  if (type === 'calendar' && payload.color !== undefined) {
+    const colors = ['', '핑크','보라','파랑','민트','주황','노랑'];
+    if (!colors.includes(payload.color)) throw new Error('지원하지 않는 일정 색상이에요.');
+    props['일정 색상'] = {select:payload.color ? {name:payload.color} : null};
+  }
   if (type === 'calendar' && payload.date !== undefined) {
     props['날짜'] = { date: { start: payload.date } };
   }
@@ -419,8 +457,25 @@ ipcMain.handle('item:create', async (_event, token, type, payload) => {
 });
 
 ipcMain.handle('item:update', async (_event, token, type, id, payload) => {
+  if (type === 'routine') await dailyRoutines(token);
+  const properties = await itemProperties(token, type, payload, true);
+  if (type === 'calendar' && payload.date !== undefined) {
+    const page = await notion(token, 'pages/' + id);
+    const original = page.properties?.['날짜']?.date;
+    if (original?.start) {
+      const shift = Date.parse(payload.date) - Date.parse(calendarDate(original.start));
+      if (!Number.isFinite(shift)) throw new Error('일정 날짜를 확인해 주세요.');
+      if (shift === 0) delete properties['날짜'];
+      else {
+        const move = value => /^\d{4}-\d{2}-\d{2}$/.test(value)
+          ? new Date(Date.parse(value) + shift).toISOString().slice(0,10)
+          : new Date(Date.parse(value) + shift).toISOString();
+        properties['날짜'] = {date:{start:move(original.start),end:original.end ? move(original.end) : null}};
+      }
+    }
+  }
   return notion(token, 'pages/' + id, 'PATCH', {
-    properties: await itemProperties(token, type, payload, true),
+    properties,
   });
 });
 
@@ -594,4 +649,5 @@ app.whenReady().then(createWindow);
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
+
 

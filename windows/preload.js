@@ -19,5 +19,6 @@ contextBridge.exposeInMainWorld('hyeona', {
   openLink: (url) => ipcRenderer.invoke('link:open', url),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   setSettings: (settings) => ipcRenderer.invoke('settings:set', settings),
+  onRefresh: (callback) => ipcRenderer.on('dashboard:refresh', () => callback()),
 });
 

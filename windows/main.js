@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, shell, powerMonitor } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -38,6 +38,7 @@ function mergeSettings(patch) {
 async function notion(token, route, method = 'GET', body) {
   const res = await fetch('https://api.notion.com/v1/' + route, {
     method,
+    signal: AbortSignal.timeout(20000),
     headers: {
       Authorization: 'Bearer ' + token,
       'Notion-Version': '2022-06-28',
@@ -242,6 +243,10 @@ ipcMain.handle('dashboard:load', async (_event, token, offsetWeeks = 0) => {
     safeLoad(errors, '평일 루틴', () => dailyRoutines(token), { results: [] }),
     safeLoad(errors, '브레인덤프', () => notion(token, 'pages/' + BRAINDUMP_PAGE), { properties: {} }),
     safeLoad(errors, '오늘 일정', () => queryAll(token, CALENDAR_DB, {page_size:100,filter:{and:[{property:'날짜',date:{on_or_after:todayStr+'T00:00:00+09:00'}},{property:'날짜',date:{on_or_before:todayStr+'T23:59:59.999+09:00'}}]}}), {results:[]}),
+    safeLoad(errors, '오늘 할 일', () => queryAll(token, TODO_DB, {page_size:100,filter:{or:[
+      {and:[{property:'날짜',date:{on_or_after:todayStr+'T00:00:00+09:00'}},{property:'날짜',date:{on_or_before:todayStr+'T23:59:59.999+09:00'}}]},
+      {and:[{property:'날짜',date:{is_empty:true}},{property:'완료',checkbox:{equals:false}}]},
+    ]}}), {results:[]}),
   ]);
 
   const calRes = results[0];
@@ -250,7 +255,8 @@ ipcMain.handle('dashboard:load', async (_event, token, offsetWeeks = 0) => {
   const memoRes = results[3];
   const routineRes = results[4];
   const dumpRes = results[5];
-  const todoRes = results[6];
+  const todayCalendarRes = results[6];
+  const todoRes = results[7];
 
   const events = calRes.results.map(calendarEvent);
 
@@ -296,7 +302,11 @@ ipcMain.handle('dashboard:load', async (_event, token, offsetWeeks = 0) => {
     done: !!(p.properties['완료'] && p.properties['완료'].checkbox),
   }));
 
-  const todo = todoRes.results.map(calendarEvent).filter(item => item.date === todayStr);
+  const todayCalendar = todayCalendarRes.results.map(calendarEvent)
+    .filter(item => item.date === todayStr).map(item => ({...item, type:'calendar'}));
+  const todo = todoRes.results.map(calendarEvent)
+    .filter(item => item.date === todayStr || (!item.date && !item.done))
+    .map(item => ({...item, type:'todo'}));
 
   const remoteBrainDump = plainText(dumpRes.properties && dumpRes.properties['내용']);
   const settings = loadSettings();
@@ -310,8 +320,10 @@ ipcMain.handle('dashboard:load', async (_event, token, offsetWeeks = 0) => {
 
   return {
     monthLabel,
+    todayDate: todayStr,
     calendarDays,
-    todayEvents: todo,
+    todayEvents: [...todayCalendar, ...todo],
+    todayTodos: todo,
     events,
     bleeding: { sum: bleedingSum, monthLabel: budgetMonth, items: bleedingItems },
     wishlist: {
@@ -432,8 +444,10 @@ async function itemProperties(token, type, payload, partial = false) {
     if (!colors.includes(payload.color)) throw new Error('지원하지 않는 일정 색상이에요.');
     props['일정 색상'] = {select:payload.color ? {name:payload.color} : null};
   }
-  if (type === 'calendar' && payload.date !== undefined) {
-    props['날짜'] = { date: { start: payload.date } };
+  if ((type === 'calendar' || type === 'todo') && payload.date !== undefined) {
+    props['날짜'] = { date: payload.date ? { start: payload.date } : null };
+  } else if (type === 'todo' && !partial) {
+    props['날짜'] = { date: { start: calendarDate(new Date().toISOString()) } };
   }
   if (type === 'bleeding') {
     if (payload.amount !== undefined) props['금액(만원)'] = { number: Number(payload.amount) || 0 };
@@ -616,6 +630,7 @@ function createWindow() {
       contextIsolation: true,
       sandbox: true,
       spellcheck: false,
+      backgroundThrottling: false,
     },
   });
 
@@ -644,7 +659,12 @@ function createWindow() {
   win.webContents.on('context-menu', () => menu.popup());
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  powerMonitor.on('resume', () => {
+    if (win && !win.isDestroyed()) win.webContents.send('dashboard:refresh');
+  });
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

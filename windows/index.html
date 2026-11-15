@@ -665,6 +665,7 @@ let state = {
   token:'',
   activeType:null,
   refreshing:false,
+  refreshPending:false,
   brainTimer:null,
   weatherTimer:null,
   calendarOffset:0,
@@ -697,6 +698,13 @@ function localDateString(date) {
     String(date.getMonth() + 1).padStart(2,'0'),
     String(date.getDate()).padStart(2,'0')
   ].join('-');
+}
+
+function todayInSeoul() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone:'Asia/Seoul', year:'numeric', month:'2-digit', day:'2-digit'
+  }).formatToParts(new Date());
+  return ['year','month','day'].map(type => parts.find(part => part.type === type).value).join('-');
 }
 
 function renderNotionBlocks(blocks, depth = 0) {
@@ -1001,7 +1009,7 @@ function renderTasks(items) {
     list.innerHTML = '<div class="empty">오늘 할 일이 없어요 ♡</div>';
     return;
   }
-  items.forEach((item) => list.appendChild(checkRow(item,'calendar')));
+  items.forEach((item) => list.appendChild(checkRow(item,item.type || 'calendar')));
 }
 
 function renderRoutine(routine) {
@@ -1061,12 +1069,15 @@ function updateErrors(errors) {
 }
 
 async function refreshDashboard() {
-  if (state.refreshing || !state.token) return;
+  if (!state.token) return;
+  if (state.refreshing) { state.refreshPending = true; return; }
   state.refreshing = true;
   byId('sync-status').textContent = '노션 동기화 중…';
   byId('refresh-button').disabled = true;
   try {
     const data = await window.hyeona.load(state.token, state.calendarOffset);
+    // A request started before midnight must not replace today's list with yesterday's.
+    if (data.todayDate !== todayInSeoul()) { state.refreshPending = true; return; }
     state.data = data;
     renderDashboard(data);
     updateErrors(data.errors);
@@ -1080,13 +1091,17 @@ async function refreshDashboard() {
   } finally {
     state.refreshing = false;
     byId('refresh-button').disabled = false;
+    if (state.refreshPending) {
+      state.refreshPending = false;
+      void refreshDashboard();
+    }
   }
 }
 
 function itemsFor(type) {
   if (!state.data) return [];
   if (type === 'calendar') return state.data.events || [];
-  if (type === 'todo') return state.data.todayEvents || [];
+  if (type === 'todo') return state.data.todayTodos || [];
   if (type === 'bleeding') return state.data.bleeding.items || [];
   if (type === 'wishlist') return state.data.wishlist.items || [];
   if (type === 'routine') return state.data.routine.items || [];
@@ -1097,9 +1112,10 @@ function formFields(type, item) {
   const current = item || {};
   let html = '<input class="field" name="title" required placeholder="제목" value="' +
     escapeHtml(current.title || '') + '">';
-  if (type === 'calendar') {
+  if (type === 'calendar' || type === 'todo') {
     html += '<input class="field" name="date" type="date" value="' +
-      escapeHtml(current.date || localDateString(new Date())) + '">' + colorSelect('name="color"',current.color);
+      escapeHtml(item ? current.date || '' : todayInSeoul()) + '">' +
+      (type === 'calendar' ? colorSelect('name="color"',current.color) : '<span></span>');
   } else if (type === 'bleeding') {
     html += '<input class="field" name="amount" type="number" step="0.1" placeholder="금액(만원)" value="' +
       (current.amount == null ? '' : current.amount) + '">';
@@ -1122,6 +1138,7 @@ function collectPayload(type, form) {
     payload.done = false;
   }
   if (type === 'routine' || type === 'todo') payload.done = false;
+  if (type === 'todo') payload.date = formData.get('date');
   if (type === 'bleeding') {
     payload.amount = Number(formData.get('amount') || 0);
     payload.memo = formData.get('memo') || '';
@@ -1133,6 +1150,9 @@ function collectPayload(type, form) {
 }
 
 function rowField(type, item) {
+  if (type === 'todo') {
+    return '<input class="field" data-field="date" type="date" value="' + escapeHtml(item.date || '') + '"><span></span>';
+  }
   if (type === 'calendar') {
     return '<input class="field" data-field="date" type="date" value="' + escapeHtml(item.date || '') + '">' + colorSelect('data-field="color"',item.color);
   }
@@ -1289,7 +1309,7 @@ byId('location-button').onclick = useCurrentLocation;
 byId('bleeding-card').onclick = () => openEditor('bleeding');
 byId('wishlist-card').onclick = () => openEditor('wishlist');
 byId('calendar-add').onclick = () => openEditor('calendar');
-byId('today-add').onclick = () => { openEditor('calendar'); byId('editor-form').elements.date.value = localDateString(new Date()); };
+byId('today-add').onclick = () => openEditor('todo');
 byId('routine-add').onclick = () => openEditor('routine');
 byId('memo-add').onclick = () => openEditor('memo');
 byId('grind-button').onclick = () => state.data && window.hyeona.openLink(state.data.links.grind);
@@ -1335,6 +1355,19 @@ byId('side-peek-edit').onclick = () => {
 byId('side-peek-save').onclick = saveSidePeek;
 byId('side-peek-delete').onclick = deleteSidePeek;
 window.addEventListener('focus',refreshDashboard);
+window.addEventListener('online',refreshDashboard);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) refreshDashboard();
+});
+window.hyeona.onRefresh(refreshDashboard);
+let observedToday = todayInSeoul();
+setInterval(() => {
+  const today = todayInSeoul();
+  if (today !== observedToday) {
+    observedToday = today;
+    refreshDashboard();
+  }
+},1000);
 
 tickClock();
 setInterval(tickClock,1000);

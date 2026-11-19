@@ -1001,7 +1001,7 @@ function renderTasks(items) {
     list.innerHTML = '<div class="empty">오늘 할 일이 없어요 ♡</div>';
     return;
   }
-  items.forEach((item) => list.appendChild(checkRow(item,'calendar')));
+  items.forEach((item) => list.appendChild(checkRow(item,'todo')));
 }
 
 function renderRoutine(routine) {
@@ -1289,7 +1289,7 @@ byId('location-button').onclick = useCurrentLocation;
 byId('bleeding-card').onclick = () => openEditor('bleeding');
 byId('wishlist-card').onclick = () => openEditor('wishlist');
 byId('calendar-add').onclick = () => openEditor('calendar');
-byId('today-add').onclick = () => { openEditor('calendar'); byId('editor-form').elements.date.value = localDateString(new Date()); };
+byId('today-add').onclick = () => openEditor('todo');
 byId('routine-add').onclick = () => openEditor('routine');
 byId('memo-add').onclick = () => openEditor('memo');
 byId('grind-button').onclick = () => state.data && window.hyeona.openLink(state.data.links.grind);
@@ -1359,6 +1359,7 @@ state.weatherTimer = setInterval(initWeather,1200000);
 </script>
 </body>
 </html>
+
 
 
 

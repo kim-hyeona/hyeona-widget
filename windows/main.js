@@ -241,7 +241,7 @@ ipcMain.handle('dashboard:load', async (_event, token, offsetWeeks = 0) => {
     }), { results: [] }),
     safeLoad(errors, '평일 루틴', () => dailyRoutines(token), { results: [] }),
     safeLoad(errors, '브레인덤프', () => notion(token, 'pages/' + BRAINDUMP_PAGE), { properties: {} }),
-    safeLoad(errors, '오늘 일정', () => queryAll(token, CALENDAR_DB, {page_size:100,filter:{and:[{property:'날짜',date:{on_or_after:todayStr+'T00:00:00+09:00'}},{property:'날짜',date:{on_or_before:todayStr+'T23:59:59.999+09:00'}}]}}), {results:[]}),
+    safeLoad(errors, '오늘 할 일', () => queryAll(token, TODO_DB, {page_size:100,sorts:[{timestamp:'created_time',direction:'descending'}]}), {results:[]}),
   ]);
 
   const calRes = results[0];
@@ -296,7 +296,11 @@ ipcMain.handle('dashboard:load', async (_event, token, offsetWeeks = 0) => {
     done: !!(p.properties['완료'] && p.properties['완료'].checkbox),
   }));
 
-  const todo = todoRes.results.map(calendarEvent).filter(item => item.date === todayStr);
+  const todo = todoRes.results.map(p => ({
+    id:p.id, title:pageTitle(p) || '할 일',
+    done:!!p.properties?.['완료']?.checkbox,
+    date:calendarDate(p.properties?.['날짜']?.date?.start),
+  })).filter(item => !item.date || item.date === todayStr);
 
   const remoteBrainDump = plainText(dumpRes.properties && dumpRes.properties['내용']);
   const settings = loadSettings();
@@ -426,6 +430,9 @@ async function itemProperties(token, type, payload, partial = false) {
   }
   if (payload.done !== undefined && ['calendar', 'bleeding', 'routine', 'todo'].includes(type)) {
     props['완료'] = { checkbox: !!payload.done };
+  }
+  if (type === 'todo' && !partial) {
+    props['날짜'] = {date:{start:calendarDate(new Date().toISOString())}};
   }
   if (type === 'calendar' && payload.color !== undefined) {
     const colors = ['', '핑크','보라','파랑','민트','주황','노랑'];
@@ -649,5 +656,6 @@ app.whenReady().then(createWindow);
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
+
 
 

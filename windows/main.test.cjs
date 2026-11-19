@@ -68,16 +68,41 @@ test('moving calendar date retains duration and time of day',async()=>{
   assert.equal(date.start,'2026-11-08T01:30:00.000Z');assert.equal(date.end,'2026-11-08T11:30:00.000Z');
 });
 
-test('Today uses a separate today query even when calendar navigates away',async()=>{
+test('Today reads shared TODO database, retains undated items and filters other dates',async()=>{
+  const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul'}).format(new Date());
+  const item=(id,date,done=false)=>({id,properties:{'할 일':{type:'title',title:[{plain_text:id}]},완료:{checkbox:done},날짜:{date:date?{start:date}:null}}});
   const f=calendarFixture((url,body)=>{
-    if(!url.includes('3cd946f45bc2803da355faf7751fb866/query'))return {results:[],properties:{}};
-    const date=body.filter.and[0].date.on_or_after.slice(0,10);
-    return {results:[{id:date,properties:{이름:{type:'title',title:[{plain_text:date}]},날짜:{date:{start:date}}}},{id:'wrong-day',properties:{날짜:{date:{start:'2000-01-01'}}}}]};
+    if(url.includes('3cd946f45bc280599404f0b86f771142/query'))return body.start_cursor?{results:[item('checked',today,true)],has_more:false}:{results:[item('undated',null),item('today',today),item('past','2000-01-01'),item('future','2099-01-01')],has_more:true,next_cursor:'next'};
+    return {results:[],properties:{}};
   });
   const result=await f.handlers['dashboard:load'](null,'test',4);
-  const today=vm.runInNewContext('calendarDate(new Date().toISOString())',f.context);
-  assert.equal(result.todayEvents.length,1);assert.equal(result.todayEvents[0].date,today);
-  assert.notEqual(result.calendarDays[0].date,today);
+  assert.deepEqual(Array.from(result.todayEvents,x=>x.id),['undated','today','checked']);
+  assert.equal(result.todayEvents[2].done,true);
+  assert.equal(result.events.length,0);
+});
+test('creating and checking a task uses TODO pages, never calendar',async()=>{
+  const f=calendarFixture((url,body)=>url.endsWith('/databases/3cd946f45bc280599404f0b86f771142')?{properties:{'할 일':{type:'title'},완료:{type:'checkbox'},날짜:{type:'date'}}}:{id:'shared-task'});
+  await f.handlers['item:create'](null,'test','todo',{title:'공부',done:false});
+  const create=f.calls.find(x=>x.url.endsWith('/pages'));
+  assert.equal(create.body.parent.database_id,'3cd946f45bc280599404f0b86f771142');
+  assert.equal(create.body.properties['할 일'].title[0].text.content,'공부');
+  assert.equal(create.body.properties.날짜.date.start,vm.runInNewContext('calendarDate(new Date().toISOString())',f.context));
+  await f.handlers['item:update'](null,'test','todo','shared-task',{done:true});
+  assert.equal(f.calls.at(-1).url.endsWith('/pages/shared-task'),true);
+  assert.equal(f.calls.at(-1).body.properties.완료.checkbox,true);
+  assert.equal(f.calls.at(-1).body.properties.날짜,undefined);
+  assert.ok(f.calls.every(x=>!x.url.includes('3cd946f45bc2803da355faf7751fb866')));
+});
+test('Today add and row controls route to todo editor',()=>{
+  const html=fs.readFileSync(__dirname+'/index.html','utf8');
+  const state={};const context={byId:()=>state,openEditor:type=>state.opened=type};
+  const statement=html.split('\n').find(line=>line.startsWith("byId('today-add').onclick"));
+  vm.runInNewContext(statement,context);state.onclick();assert.equal(state.opened,'todo');
+  const source=html.slice(html.indexOf('function renderTasks('),html.indexOf('function renderRoutine('));
+  const types=[];const list={appendChild() {}};
+  const ctx={byId:id=>id==='today-tasks'?list:{},checkRow:(item,type)=>{types.push(type);return {};}};
+  vm.runInNewContext(source+';renderTasks([{id:"task"}]);',ctx);
+  assert.deepEqual(types,['todo']);
 });
 test('routines reset once at Korean midnight and retain same-day progress',async()=>{
   const settings={routineDate:'2026-11-04'};
@@ -113,3 +138,4 @@ test('calendar palette stays pale and supports manual overrides',()=>{
   assert.equal(vm.runInNewContext("eventPalette({title:'은비랑 팝업'})[0]",context),'#EDF5FA');
   assert.equal(vm.runInNewContext("eventPalette({title:'라포즈 알바',color:'보라'})[0]",context),'#F3EFF9');
 });
+

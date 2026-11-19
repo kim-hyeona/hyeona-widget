@@ -47,10 +47,10 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with: {name: Hyeona-Widget-Windows-Installer, path: installers}
-      - name: Publish Windows 1.6.6
+      - name: Publish Windows 1.6.7
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh release view windows-v1.6.6 || gh release create windows-v1.6.6 --target "$GITHUB_SHA" --title "Windows 1.6.6" --notes "Pastel calendar colors, today-only calendar tasks, daily routine reset in Korean time, and reliable timed event sync."
-          gh release upload windows-v1.6.6 installers/*.exe --clobber
+          gh release view windows-v1.6.7 || gh release create windows-v1.6.7 --target "$GITHUB_SHA" --title "Windows 1.6.7" --notes "Fix Windows Today to read and write the shared Notion task database used by Android. Preserve undated tasks and keep calendar events separate."
+          gh release upload windows-v1.6.7 installers/*.exe --clobber

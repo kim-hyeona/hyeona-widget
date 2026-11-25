@@ -13,7 +13,7 @@ android {
         versionName "1.6.6"
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
-    testOptions {unitTests.includeAndroidResources=true;unitTests.all {maxHeapSize="1024m";systemProperty "robolectric.dependency.repo.url","https://repo.maven.apache.org/maven2";["https.proxyHost","https.proxyPort","http.proxyHost","http.proxyPort","javax.net.ssl.trustStore"].each {n->if(System.getProperty(n))systemProperty n,System.getProperty(n)}}}
+    testOptions {unitTests.includeAndroidResources=true;unitTests.all {maxHeapSize="1024m";if(project.hasProperty("robolectricOfflineDir")){systemProperty "robolectric.offline","true";systemProperty "robolectric.dependency.dir",project.property("robolectricOfflineDir")};systemProperty "robolectric.dependency.repo.url","https://repo.maven.apache.org/maven2";["https.proxyHost","https.proxyPort","http.proxyHost","http.proxyPort","javax.net.ssl.trustStore"].each {n->if(System.getProperty(n))systemProperty n,System.getProperty(n)}}}
 }
 
 

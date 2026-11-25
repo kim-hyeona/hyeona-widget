@@ -6,7 +6,7 @@ android {
     buildToolsVersion "35.0.0"
     defaultConfig {
         testInstrumentationRunner "com.hyeona.widget.WidgetRenderInstrumentation"
-        applicationId "com.hyeona.widget"
+        applicationId "com.hyeona.widget.dates"
         minSdk 26
         targetSdk 35
         versionCode 34

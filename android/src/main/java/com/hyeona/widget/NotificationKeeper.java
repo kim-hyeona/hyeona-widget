@@ -20,6 +20,7 @@ final class NotificationKeeper {
     private static final int TODO_ID = 1203;
     static final int ROUTINE_ID=1204;
 
+    static void invalidateToday(Context c){post(c,TODO_ID,"오늘 할 일 · "+TaskDates.today(),"오늘 목록을 다시 불러오는 중이에요.");}
     static void refresh(Context c) {
         createChannel(c);restoreRoutine(c);NotificationRefreshService.schedule(c);
     }

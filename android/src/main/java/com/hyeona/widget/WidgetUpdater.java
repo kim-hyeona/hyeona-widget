@@ -74,9 +74,9 @@ public final class WidgetUpdater {
                 try { d.wishes = fetchCount(token, WISHLIST_DB); } catch (Exception e) { d.error="일부 데이터 연결 실패 · 앱에서 새로고침"; }
                 try { d.memos = fetchSimple(token, MEMO_DB, "제목", false); } catch (Exception e) { d.error="일부 데이터 연결 실패 · 앱에서 새로고침"; }
                 try {
-                    List<NotionClient.Item> items=NotionClient.query(token,"todo");d.todos.clear();
+                    List<NotionClient.Item> items=NotionClient.query(token,"todo");d.todos.clear();d.todosDay=TaskDates.today();
                     for (NotionClient.Item item : items)
-                        if (!item.done) d.todos.add(new Event(item.id, item.title, "", false));
+                        if (!item.done) d.todos.add(new Event(item.id, item.title, item.date, false));
                 } catch (Exception e) { d.error="일부 데이터 연결 실패 · 앱에서 새로고침"; }
                 try {
                     List<NotionClient.Item> items=NotionClient.query(token,"routine");d.routines.clear();
@@ -93,19 +93,20 @@ public final class WidgetUpdater {
         });
     }
 
+    static void sanitizeTodos(Dashboard d){String today=TaskDates.today();List<Event> out=new ArrayList<>();if(today.equals(d.todosDay))for(Event e:d.todos)if(TaskDates.onDay(e.date,today))out.add(e);d.todos=out;}
     private static String cacheKey(Calendar month){return "widget_cache_"+month.get(Calendar.YEAR)+"_"+month.get(Calendar.MONTH);}
     private static JSONArray encode(List<Event> items)throws Exception{JSONArray out=new JSONArray();for(Event e:items)out.put(new JSONObject().put("id",e.id).put("title",e.title).put("date",e.date).put("done",e.done).put("color",e.color));return out;}
     private static List<Event> decode(JSONArray a)throws Exception{List<Event> out=new ArrayList<>();if(a!=null)for(int i=0;i<a.length();i++){JSONObject x=a.getJSONObject(i);out.add(new Event(x.optString("id"),x.optString("title"),x.optString("date"),x.optBoolean("done"),x.optString("color","기본")));}return out;}
-    private static void restore(Context c,Dashboard d,Calendar month){try{JSONObject x=new JSONObject(c.getSharedPreferences("prefs",0).getString(cacheKey(month),"{}"));d.events=decode(x.optJSONArray("events"));d.todos=decode(x.optJSONArray("todos"));d.memos=decode(x.optJSONArray("memos"));d.routines=decode(x.optJSONArray("routines"));d.money=x.optString("money");d.wishes=x.optInt("wishes");}catch(Exception ignored){}}
+    private static void restore(Context c,Dashboard d,Calendar month){try{JSONObject x=new JSONObject(c.getSharedPreferences("prefs",0).getString(cacheKey(month),"{}"));d.events=decode(x.optJSONArray("events"));d.todos=decode(x.optJSONArray("todos"));d.todosDay=x.optString("todosDay","");sanitizeTodos(d);d.memos=decode(x.optJSONArray("memos"));d.routines=decode(x.optJSONArray("routines"));d.money=x.optString("money");d.wishes=x.optInt("wishes");}catch(Exception ignored){}}
     private static void publish(Context c,AppWidgetManager m,int[] ids,Dashboard d,Calendar month){
-        lastDashboard=d;lastMonth=month;
+        sanitizeTodos(d);lastDashboard=d;lastMonth=month;
         for(int id:ids)m.updateAppWidget(id,views(c,d,month,m.getAppWidgetOptions(id).getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT,700)));
-        try{JSONObject x=new JSONObject().put("events",encode(d.events)).put("todos",encode(d.todos)).put("memos",encode(d.memos)).put("routines",encode(d.routines)).put("money",d.money).put("wishes",d.wishes);c.getSharedPreferences("prefs",0).edit().putString(cacheKey(month),x.toString()).apply();}catch(Exception ignored){}
+        try{JSONObject x=new JSONObject().put("events",encode(d.events)).put("todos",encode(d.todos)).put("todosDay",d.todosDay).put("memos",encode(d.memos)).put("routines",encode(d.routines)).put("money",d.money).put("wishes",d.wishes);c.getSharedPreferences("prefs",0).edit().putString(cacheKey(month),x.toString()).apply();}catch(Exception ignored){}
     }
 
     private static RemoteViews views(Context c, Dashboard d, Calendar displayMonth) {return views(c,d,displayMonth,700);}
     private static RemoteViews views(Context c, Dashboard d, Calendar displayMonth,int heightDp) {
-        boolean compact=heightDp<620;
+        sanitizeTodos(d);boolean compact=heightDp<620;
         int routineLimit=compact?4:6;
         RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget_three_columns);
         Calendar now = Calendar.getInstance();
@@ -135,7 +136,7 @@ public final class WidgetUpdater {
         int first = grid.get(Calendar.DAY_OF_WEEK) - 1;
         int weeksNeeded = (int) Math.ceil((first + grid.getActualMaximum(Calendar.DAY_OF_MONTH)) / 7.0);
         grid.add(Calendar.DAY_OF_MONTH, -first);
-        String todayKey = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date());
+        String todayKey = TaskDates.today();
         List<Event> today = d.todos;
 
         for (int week = 0; week < 6; week++) {
@@ -366,13 +367,13 @@ public final class WidgetUpdater {
         return new JSONObject(s.toString());
     }
 
-    private static final class Dashboard {
+    static final class Dashboard {
         Calendar careStart;
         Map<String, NotionClient.CareEntry> care = new HashMap<>();
         String careError = "", routineError = "";
-        List<Event> events = new ArrayList<>(), todos = new ArrayList<>(), memos = new ArrayList<>(), routines = new ArrayList<>(); String error = "", money = "", brain = ""; int wishes = 0;
+        List<Event> events = new ArrayList<>(), todos = new ArrayList<>(), memos = new ArrayList<>(), routines = new ArrayList<>(); String error = "", money = "", brain = "", todosDay=""; int wishes = 0;
     }
-    private static final class Event {
+    static final class Event {
         final String id, title, date, color; final boolean done;
         Event(String id, String title, String date, boolean done) { this(id,title,date,done,"기본"); }
         Event(String id,String title,String date,boolean done,String color){this.id=id;this.title=title;this.date=date;this.done=done;this.color=color; }

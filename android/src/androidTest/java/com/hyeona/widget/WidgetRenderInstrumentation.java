@@ -19,7 +19,7 @@ public class WidgetRenderInstrumentation extends Instrumentation {
   View previous=null;float density=c.getResources().getDisplayMetrics().density;
   for(int height:new int[]{520,600,720,800})for(int offset=0;offset<12;offset++)for(int populated=0;populated<2;populated++){
    Object d=dc.newInstance();Calendar month=Calendar.getInstance();month.set(2026,Calendar.NOVEMBER,1);month.add(Calendar.MONTH,offset);
-   if(populated==1){for(String name:new String[]{"events","todos","memos","routines"}){Field f=dashboard.getDeclaredField(name);f.setAccessible(true);List items=(List)f.get(d);for(int i=0;i<8;i++)items.add(ec.newInstance("test-"+i,name.equals("routines")?"네트워크 진도나가기":"브런치 카페 약속",new java.text.SimpleDateFormat("yyyy-MM-dd",Locale.US).format(month.getTime()),i<2,EventColors.NAMES[i%7]));}}
+   if(populated==1){Field todoDay=dashboard.getDeclaredField("todosDay");todoDay.setAccessible(true);todoDay.set(d,TaskDates.today());for(String name:new String[]{"events","todos","memos","routines"}){Field f=dashboard.getDeclaredField(name);f.setAccessible(true);List items=(List)f.get(d);for(int i=0;i<8;i++)items.add(ec.newInstance("test-"+i,name.equals("routines")?"네트워크 진도나가기":"브런치 카페 약속",new java.text.SimpleDateFormat("yyyy-MM-dd",Locale.US).format(month.getTime()),i<2,EventColors.NAMES[i%7]));}}
    RemoteViews original=(RemoteViews)render.invoke(null,c,d,month,height);Parcel parcel=Parcel.obtain();original.writeToParcel(parcel,0);parcel.setDataPosition(0);RemoteViews remote=RemoteViews.CREATOR.createFromParcel(parcel);parcel.recycle();
    FrameLayout parent=new FrameLayout(c);View view=remote.apply(c,parent);remote.reapply(c,view);int widthPx=(int)(384*density),heightPx=(int)(height*density);view.measure(View.MeasureSpec.makeMeasureSpec(widthPx,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(heightPx,View.MeasureSpec.EXACTLY));view.layout(0,0,widthPx,heightPx);
    View todayPanel=(View)view.findViewById(R.id.today_list).getParent(),memoPanel=(View)view.findViewById(R.id.memo_list).getParent(),routinePanel=(View)view.findViewById(R.id.routine_list).getParent();
@@ -30,7 +30,7 @@ public class WidgetRenderInstrumentation extends Instrumentation {
    TextView number=view.findViewById(R.id.day_number_0),memo=view.findViewById(R.id.memo_text_0),routine=view.findViewById(R.id.routine_text_0);
    float scaled=c.getResources().getDisplayMetrics().scaledDensity;
    if(Math.abs(number.getTextSize()/scaled-15)>0.1||Math.abs(memo.getTextSize()/scaled-14)>0.1)throw new AssertionError("Incorrect font size");
-   if(populated==1){
+   if(populated==1){Field todoDay=dashboard.getDeclaredField("todosDay");todoDay.setAccessible(true);todoDay.set(d,TaskDates.today());
     if(routine.getHeight()>((View)routine.getParent()).getHeight())throw new AssertionError("Routine clipped at height "+height);
     if(view.findViewById(R.id.routine_more).getBottom()>view.findViewById(R.id.detail_panels).getHeight())throw new AssertionError("Footer clipped");
     int first=month.get(Calendar.DAY_OF_WEEK)-1;TextView chip=view.findViewById(c.getResources().getIdentifier("day_event_"+first,"id",c.getPackageName()));
